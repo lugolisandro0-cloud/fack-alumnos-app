@@ -1,0 +1,9 @@
+{
+  "name": "alumnos-y-cuotas",
+  "productName": "Alumnos y Cuotas",
+  "version": "1.6.0",
+  "description": "Alumnos, cuotas y clases de FACK Music",
+  "main": "main.js",
+  "author": "FACK Music",
+  "private": true
+}

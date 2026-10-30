@@ -1,0 +1,180 @@
+ALUMNOS Y CUOTAS (FACK MUSIC) — versión 1.6
+Celular (Android y iPhone) y computadora (Mac y Windows)
+
+Hay dos cuentas separadas, cada una con su propia contraseña:
+- DUEÑO (Felipe): ve y edita todo, define cuánto le paga al administrador y qué
+  puede ver.
+- ADMINISTRADOR (Licha): ve las clases y los alumnos, y en "Mis pagos" lo que le
+  corresponde por cada alumno y lo que el dueño ya le pagó. No ve cuotas, cobros
+  ni gastos, salvo lo que el dueño le habilite.
+Ninguno conoce la contraseña del otro. Los datos que el administrador no puede
+ver ni siquiera llegan a su celular o computadora.
+
+=====================================================
+1) PREPARAR GOOGLE (una sola vez, en la cuenta de Google de FELIPE)
+=====================================================
+Tiene que hacerse con la cuenta de Google del dueño. Quien tenga la planilla en
+su cuenta puede abrirla y ver todo, por eso no puede quedar en la del administrador.
+
+1. Con la cuenta de Google de Felipe, entrá a https://sheets.new.
+   Ponele de nombre a la planilla "FACK Music - Alumnos y Cuotas".
+2. En la planilla: menú Extensiones > Apps Script.
+3. Borrá todo lo que aparece en el editor y pegá el contenido completo del
+   archivo "Codigo.gs" (carpeta "google").
+   Opcional: en COMPARTIR_CON poné el mail de Google del administrador (entre
+   las comillas) para que le llegue el calendario de clases.
+   Guardá (ícono del disquete).
+4. A la izquierda, en "Servicios", tocá "+" > "Google Calendar API" > Agregar.
+5. Arriba a la derecha: Implementar > Nueva implementación.
+   - Tipo (ícono del engranaje): Aplicación web.
+   - Ejecutar como: Yo.
+   - Quién tiene acceso: Cualquier usuario.
+   - Implementar > Autorizar acceso > elegí la cuenta de Felipe.
+   - Google avisa "Google no verificó esta app" (es normal, la app es suya):
+     Configuración avanzada > Ir a … (no seguro) > Permitir.
+   - Copiá la "URL de la aplicación web" (termina en /exec).
+
+=====================================================
+2) CREAR LAS CUENTAS
+=====================================================
+Dueño (Felipe):
+1. Abrí la app, pegá la dirección (/exec) y tocá Seguir.
+2. "Crear cuenta de dueño": tu nombre y una contraseña.
+   Si en ese dispositivo ya había alumnos cargados, se suben a la cuenta.
+3. Tocá tu nombre arriba > "Invitar al administrador" > "Crear código de
+   invitación". Pasale al administrador el código y la dirección (/exec).
+   El código sirve una sola vez y vence en 7 días.
+4. En la misma pantalla elegí el pago general (porcentaje de cada cuota o monto
+   fijo) y qué puede ver y hacer el administrador. En la ficha de cada alumno se
+   puede poner un pago distinto.
+
+Administrador (Licha):
+1. Abrí la app, pegá la dirección (/exec) y tocá Seguir.
+2. "Tengo un código de invitación": el código, tu nombre y tu contraseña.
+
+Si ya cargaste alumnos en tu celular antes de esta versión: que Felipe cree su
+cuenta de dueño desde TU celular la primera vez (se suben todos los datos a su
+cuenta). Después él cierra sesión (tu nombre arriba > Cerrar sesión) y vos
+entrás con la invitación.
+
+Si alguien se olvida la contraseña:
+- Administrador: el dueño entra a "Permisos" > "Quitar acceso al administrador"
+  y le crea una invitación nueva.
+- Dueño: en Apps Script, arriba elegí la función "reiniciarDueno" y tocá
+  Ejecutar. Después, al abrir la app, vuelve a crear la cuenta de dueño.
+Después de 8 contraseñas mal puestas, la cuenta se bloquea 15 minutos.
+
+=====================================================
+2b) VINCULAR CELULARES Y COMPUTADORAS (QR)
+=====================================================
+Todo lo que cargues en un dispositivo aparece en los demás de la misma cuenta
+(se sincroniza al abrir la app, al volver a ella y cada 30 segundos; también
+con tu nombre arriba > "Sincronizar ahora").
+
+Para sumar un dispositivo sin volver a escribir la dirección ni la contraseña:
+1. En un dispositivo donde ya entraste (por ejemplo la computadora): tocá tu
+   nombre arriba > "Vincular otro dispositivo (QR)". Aparece un QR y un
+   código.
+2. En el celular nuevo, en la pantalla de entrada: "Escanear QR para vincular"
+   y apuntá al QR. (También sirve la cámara del teléfono: abre la app sola.)
+   En otra computadora: pegá la dirección (/exec) > Seguir > "Tengo un código
+   para vincular" y escribí el código.
+El dispositivo nuevo entra con la MISMA cuenta que mostró el QR (dueño o
+administrador). El código sirve una sola vez y vence en 10 minutos.
+
+IMPORTANTE para esta versión: Felipe tiene que actualizar el servidor una vez.
+En Apps Script borrá todo, pegá el "Codigo.gs" nuevo, guardá y después
+Implementar > Administrar implementaciones > lápiz (Editar) > Versión: "Nueva
+versión" > Implementar. La dirección (/exec) no cambia.
+
+=====================================================
+2c) ENSAMBLES CON NOMBRE
+=====================================================
+- Cada alumno de curso "Ensambles" puede tener un "Nombre del ensamble"
+  (ej.: Ensamble 1, Los Boscas). Los que comparten nombre, día y horario
+  aparecen como una sola clase en el calendario y en Google Calendar.
+- Desde el calendario: tocá el ensamble para cambiarle el nombre, sumar un
+  alumno que ya está cargado ("Agregar"), crear uno nuevo o sacar a alguien.
+- Sin nombre, se agrupan como antes: por día y horario.
+
+=====================================================
+2d) ACTUALIZACIONES AUTOMÁTICAS
+=====================================================
+- Al abrir, la app busca si hay una versión nueva. Si la hay, la descarga y
+  aparece "Nueva versión … · Actualizar ahora". Si tocás "Después", se aplica
+  la próxima vez que la abras. Los datos no se tocan.
+- Tu nombre arriba > "Actualizaciones" muestra la versión y permite apagarlas
+  en ese dispositivo.
+- Si una versión nueva necesita instalar la app otra vez (por ejemplo, porque
+  pide un permiso nuevo del teléfono), la app lo avisa.
+- Las versiones salen del repositorio de GitHub de Licha. Quien controla esa
+  cuenta puede cambiar lo que hacen las apps: tenela protegida con
+  verificación en dos pasos.
+
+IMPORTANTE para esta versión: Felipe tiene que actualizar el servidor una vez
+más (el "Codigo.gs" nuevo, como en 2b) para que Google Calendar use los nombres
+de los ensambles.
+
+=====================================================
+3) QUÉ SE SINCRONIZA CON GOOGLE CALENDAR
+=====================================================
+Las clases quedan en el calendario "FACK Music · Clases" de la cuenta de Felipe.
+Los eventos no muestran cuotas ni montos. Para compartirlo a mano: Google
+Calendar > "FACK Music · Clases" > Configuración y uso compartido > Compartir
+con personas específicas > mail > "Hacer cambios en eventos".
+- Cada clase es un evento semanal. Los ensambles son un solo evento con todos
+  los integrantes.
+- Si en Google Calendar movés una clase (todos los eventos, o "este y los
+  siguientes"), cambia el horario del alumno en la app.
+- Si borrás la serie en Google Calendar, se quita esa clase del alumno.
+- Si creás en ese calendario un evento semanal con el nombre de un alumno,
+  se suma como clase de ese alumno.
+- Si cambiás una sola fecha, la agenda de la app muestra el cambio en esa fecha,
+  sin tocar la ficha.
+- Cuando cambiás el horario desde la app, las clases ya dadas quedan en el
+  calendario como historial y el horario nuevo empieza desde hoy.
+- La baja de un alumno corta la serie a fin del mes que corresponde.
+- La planilla tiene hojas para mirar o exportar: Alumnos, Pagos, Gastos y Pagos
+  al administrador. Se arman solas: no las edites, los cambios se hacen desde la app.
+
+=====================================================
+4) ANDROID
+=====================================================
+Pasá "AlumnosYCuotas.apk" al teléfono (WhatsApp, Drive o cable) y abrilo.
+Android pide permiso para instalar apps de fuera de Play Store: aceptá.
+Se instala encima de la versión anterior sin perder datos.
+Para volver a compilarlo en esta Mac: doble clic en "construir-apk.command".
+
+=====================================================
+5) COMPUTADORA (Mac o Windows)
+=====================================================
+Mac con chip Apple (M1, M2, M3, M4): "Alumnos y Cuotas - Mac (chip Apple M).zip"
+Mac con Intel: "Alumnos y Cuotas - Mac (Intel).zip"
+(Para saberlo: menú Apple > Acerca de esta Mac > "Chip" o "Procesador".)
+1. Descomprimí el zip y arrastrá "Alumnos y Cuotas" a Aplicaciones.
+2. La primera vez: clic derecho > Abrir > Abrir. Si macOS no deja:
+   Configuración del Sistema > Privacidad y seguridad > "Abrir igualmente".
+
+Windows: "Alumnos y Cuotas - Windows.zip"
+1. Clic derecho > Extraer todo. Dejá la carpeta donde quieras (por ejemplo en Documentos).
+2. Abrí "Alumnos y Cuotas.exe". Si Windows muestra "Windows protegió su PC":
+   Más información > Ejecutar de todas formas.
+3. Para tenerla a mano: clic derecho en el .exe > Anclar a la barra de tareas.
+
+En la computadora los avisos de cobro no suenan: llegan al celular del dueño.
+
+=====================================================
+6) iPHONE (necesita una Mac con Xcode)
+=====================================================
+1. Instalá Xcode desde la App Store (gratis).
+2. Doble clic en "abrir-en-xcode.command" (si macOS no deja: clic derecho > Abrir).
+   Esperá a que termine "Resolving packages".
+3. Xcode > Settings > Accounts > "+" > Apple ID.
+4. "App" (ícono azul) > "Signing & Capabilities" > Team: tu nombre.
+   Si hay error con el Bundle Identifier, cambialo por ar.fackmusic.alumnos.licha
+5. Conectá el iPhone, desbloquealo, "Confiar", elegilo arriba en Xcode y tocá ▶.
+6. En el iPhone: Ajustes > Privacidad y seguridad > Modo desarrollador > activar.
+   Si dice "Desarrollador no confiable": Ajustes > General > VPN y gestión de
+   dispositivos > tu Apple ID > Confiar.
+Con Apple ID gratis dura 7 días (repetí los pasos 5 para renovarla). Con la
+cuenta de desarrollador de Apple (USD 99 al año) se instala por TestFlight, sin Mac.
