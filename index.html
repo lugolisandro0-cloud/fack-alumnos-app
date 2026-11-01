@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#0B0B12">
 <script>/* Actualizaciones: si hay una versión descargada más nueva que la instalada, se usa esa. */
 (function(){
-  var V="1.6.2";window.APP_VERSION=V;window.APP_BASE=window.APP_BASE||V;
+  var V="1.6.3";window.APP_VERSION=V;window.APP_BASE=window.APP_BASE||V;
   function cmp(a,b){a=String(a).split(".").map(Number);b=String(b).split(".").map(Number);for(var i=0;i<3;i++){var d=(a[i]||0)-(b[i]||0);if(d)return d>0?1:-1}return 0}
   window.cmpVersion=cmp;
   if(window.__fackSwap)return;
@@ -821,19 +821,33 @@ function panelPermisos(){
 function cotizHTML(){
   const c=config.cambio||{},falta=faltaCotiz();
   if(!usaOtraMoneda()&&!c.USD&&!c.EUR)return `<button class="btn sm ghost" id="cotizBtn" style="align-self:flex-start;margin-top:6px">Cobrar en dólares o euros</button>`;
-  return `<div class="kv"><span>Cotización${c.fecha?` <span class="by">(${esc(parse(c.fecha).toLocaleDateString("es-AR",{day:"numeric",month:"short"}))})</span>`:""}</span><span class="num">${c.USD?"US$ 1 = "+fmt(c.USD):""}${c.USD&&c.EUR?" · ":""}${c.EUR?"€ 1 = "+fmt(c.EUR):""}</span></div>
+  return `<div class="kv"><span>Cotización${c.auto!==false?` <span class="by">${c.tipo==="oficial"?"oficial":"blue"} · automática</span>`:""}${c.fecha?` <span class="by">(${esc(parse(c.fecha).toLocaleDateString("es-AR",{day:"numeric",month:"short"}))})</span>`:""}</span><span class="num">${c.USD?"US$ 1 = "+fmt(c.USD):""}${c.USD&&c.EUR?" · ":""}${c.EUR?"€ 1 = "+fmt(c.EUR):""}</span></div>
     ${falta.length?`<div class="alert late"><p>Falta la cotización ${falta.map(k=>k==="USD"?"del dólar":"del euro").join(" y ")}: esas cuotas no se suman a los totales.</p></div>`:`<p class="by" style="margin:0">Los totales están en pesos, con esta cotización.</p>`}
     <button class="btn sm ghost" id="cotizBtn" style="align-self:flex-start">Cambiar cotización</button>`;
 }
 function panelCotiz(){
-  const c=config.cambio||{};
+  const c=config.cambio||{},auto=c.auto!==false;
   panel(`<h2 style="font-size:24px">Cotización</h2>
     <p class="muted" style="margin:0">Las cuotas en dólares o euros se pasan a pesos con estos valores para los totales, el resumen y lo que le corresponde ${esc(aAdmin())}. Cada alumno elige su moneda en su ficha, al lado de la cuota.</p>
+    <div class="field"><label for="cxM">Cómo se actualiza</label><select id="cxM"><option value="blue" ${auto&&c.tipo!=="oficial"?"selected":""}>Automática · dólar y euro blue (venta)</option><option value="oficial" ${auto&&c.tipo==="oficial"?"selected":""}>Automática · dólar y euro oficial (venta)</option><option value="manual" ${auto?"":"selected"}>Manual · la pongo yo</option></select></div>
+    <p class="by" style="margin:0">La automática se actualiza sola una vez por día (fuente: Bluelytics).</p>
     <div class="two"><div class="field"><label for="cxU">US$ 1 =</label><input id="cxU" inputmode="decimal" placeholder="$ en pesos" value="${c.USD||""}"></div>
       <div class="field"><label for="cxE">€ 1 =</label><input id="cxE" inputmode="decimal" placeholder="$ en pesos" value="${c.EUR||""}"></div></div>
     <div class="actions"><button class="btn ghost" id="cxX">Cancelar</button><button class="btn" id="cxOk">Guardar</button></div>`);
+  const pintar=()=>{const m=$("#cxM").value!=="manual";$("#cxU").disabled=m;$("#cxE").disabled=m};pintar();$("#cxM").onchange=pintar;
   $("#cxX").onclick=closePanel;
-  $("#cxOk").onclick=()=>{put("config","cambio",{USD:toNum($("#cxU").value)||0,EUR:toNum($("#cxE").value)||0,fecha:iso(today())});closePanel();toast("Cotización guardada")};
+  $("#cxOk").onclick=async()=>{const m=$("#cxM").value;
+    if(m==="manual"){put("config","cambio",{USD:toNum($("#cxU").value)||0,EUR:toNum($("#cxE").value)||0,fecha:iso(today()),auto:false});closePanel();toast("Cotización guardada");return}
+    closePanel();const ok=await cotizacionAuto(m,true);toast(ok?"Cotización actualizada":"Se actualiza sola en la próxima sincronización")};
+}
+async function cotizacionAuto(tipo,forzar){
+  if(!esDueno())return false;
+  const c=config.cambio||{};tipo=tipo||(c.tipo==="oficial"?"oficial":"blue");
+  if(!forzar&&(c.auto===false||c.fecha===iso(today())))return false;
+  try{const r=await fetch("https://api.bluelytics.com.ar/v2/latest",{cache:"no-store"});if(!r.ok)throw 0;const j=await r.json();
+    const usd=Number(j[tipo]&&j[tipo].value_sell),eur=Number(j[tipo+"_euro"]&&j[tipo+"_euro"].value_sell);if(!(usd>0))throw 0;
+    put("config","cambio",{USD:Math.round(usd),EUR:eur>0?Math.round(eur):(Number(c.EUR)||0),fecha:iso(today()),auto:true,tipo});return true}
+  catch(e){if(forzar)put("config","cambio",{...c,auto:true,tipo,fecha:""});return false}
 }
 function vResumen(){
   if(!esDueno())return vMisPagos();
@@ -1661,6 +1675,7 @@ $("#nextM").onclick=()=>{const d=new Date(cur.y,cur.m+1,1);cur={y:d.getFullYear(
   loaded=true;render();
   try{actualizacion.arranqueOk()}catch(e){}
   setTimeout(()=>actualizacion.revisar(false),4000);
+  setTimeout(()=>{try{if(usaOtraMoneda())cotizacionAuto()}catch(e){}},6000);
   setInterval(()=>{if(document.visibilityState==="visible")actualizacion.revisar(false)},6*3600*1000);
   // sincronización: al abrir, al volver a la app y cada minuto mientras está abierta (no hace nada sin sesión)
   setInterval(()=>{if(document.visibilityState==="visible")sync.ciclo()},30000);

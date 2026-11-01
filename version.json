@@ -1,6 +1,6 @@
 {
- "version": "1.6.2",
- "sha256": "bc865a2d248a80d9ab1379828e0208e83c1937ff459996184500a839aff1ab88",
- "notas": "Moneda por alumno: pesos, dólares o euros",
+ "version": "1.6.3",
+ "sha256": "414dd08d39dddc9b2ae8ea8be63fc3a3ea557e8e6ff8728b2ebc0ee69978bf78",
+ "notas": "Cotización automática del dólar y el euro",
  "base": "1.6.0"
 }
