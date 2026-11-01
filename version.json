@@ -1,6 +1,6 @@
 {
- "version": "1.6.0",
- "sha256": "f101d51a4eab8b3bb96215f54f70d5af7e3192e8da4267dfd1d28d8d172e7874",
- "notas": "Ensambles con nombre y actualizaciones automáticas",
+ "version": "1.6.1",
+ "sha256": "7c9f607e01444d7224530c56223f8caaea388318fcefdd3f18fd3222c2059638",
+ "notas": "Los ensambles se ven agrupados también en la vista Mes",
  "base": "1.6.0"
 }

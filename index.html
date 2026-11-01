@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#0B0B12">
 <script>/* Actualizaciones: si hay una versión descargada más nueva que la instalada, se usa esa. */
 (function(){
-  var V="1.6.0";window.APP_VERSION=V;window.APP_BASE=window.APP_BASE||V;
+  var V="1.6.1";window.APP_VERSION=V;window.APP_BASE=window.APP_BASE||V;
   function cmp(a,b){a=String(a).split(".").map(Number);b=String(b).split(".").map(Number);for(var i=0;i<3;i++){var d=(a[i]||0)-(b[i]||0);if(d)return d>0?1:-1}return 0}
   window.cmpVersion=cmp;
   if(window.__fackSwap)return;
@@ -484,7 +484,12 @@ function vCalMes(){
   const SD=selDay??(isPhone()&&isCur?t.getDate():null);
   const act=alumnos.filter(a=>activoEn(a,y,m));
   const byDay={};for(const a of act){if(!puede("verCobros")||!tieneCuota(a))continue;const d=diaVence(a,y,m);(byDay[d]=byDay[d]||[]).push(a)}
-  const clasesDia=d=>{const wd=(new Date(y,m,d).getDay()+6)%7+1,out=[];for(const a of act)for(const c of clasesDe(a))if(c.d===wd)out.push({a,h:c.h,hf:c.hf});return out.sort((p,q)=>p.h.localeCompare(q.h)||p.a.nombre.localeCompare(q.a.nombre))};
+  const clasesDia=d=>{const wd=(new Date(y,m,d).getDay()+6)%7+1,out=[],gr={};for(const a of act)for(const c of clasesDe(a))if(c.d===wd){
+      if(GRUPALES.includes(a.curso)){const g=grupoDe(a),k=`${a.curso}|${wd}|${c.h}|${c.hf}|${g}`;if(!gr[k]){gr[k]={curso:a.curso,wd,h:c.h,hf:c.hf,g,miembros:[]};out.push({grupo:gr[k],h:c.h,hf:c.hf,nombre:""})}gr[k].miembros.push(a)}
+      else out.push({a,h:c.h,hf:c.hf,nombre:a.nombre})}
+    for(const o of out)if(o.grupo){o.grupo.miembros.sort((p,q)=>p.nombre.localeCompare(q.nombre));o.nombre=tituloGrupo(o.grupo.curso,o.grupo.g,o.grupo.miembros.length)}
+    return out.sort((p,q)=>p.h.localeCompare(q.h)||p.nombre.localeCompare(q.nombre))};
+  const grAttr=c=>`data-grupo="${esc(c.grupo.curso)}|${c.grupo.wd}|${c.grupo.h}|${c.grupo.hf}|${esc(c.grupo.g||"")}"`;
   const verCl=calVer!=="cuotas",verCu=calVer!=="clases";
   let cells="";const total=Math.ceil((start+days)/7)*7;
   for(let i=0;i<total;i++){
@@ -492,7 +497,7 @@ function vCalMes(){
     if(d<1||d>days){cells+=`<div class="day out" aria-hidden="true"></div>`;continue}
     const cu=verCu?(byDay[d]||[]).slice().sort((a,b)=>a.nombre.localeCompare(b.nombre)):[];
     const cl=verCl?clasesDia(d):[];
-    const items=[...cl.map(c=>`<span class="cl" title="${esc(c.a.nombre)} · clase ${esc(c.h)}"><span class="h">${esc(c.h)}</span><span class="n">${esc(c.a.nombre)}</span></span>`),...cu.map(a=>evHTML(a,y,m,true))];
+    const items=[...cl.map(c=>`<span class="cl" title="${esc(c.grupo?c.nombre+": "+c.grupo.miembros.map(x=>x.nombre).join(", "):c.nombre)} · clase ${esc(c.h)}"><span class="h">${esc(c.h)}</span><span class="n">${esc(c.nombre)}</span></span>`),...cu.map(a=>evHTML(a,y,m,true))];
     const max=4,shown=items.slice(0,max);
     cells+=`<div class="day ${isCur&&t.getDate()===d?"is-today":""} ${SD===d?"sel":""}" data-day="${d}" role="button" tabindex="0" aria-label="${d}: ${cl.length} clases, ${cu.length} cuotas">
       <span class="dn">${d}</span>
@@ -505,7 +510,7 @@ function vCalMes(){
     const fecha=new Date(y,m,SD).toLocaleDateString("es-AR",{weekday:"long",day:"numeric",month:"long"});
     det=`<div class="sheetbox"><div class="subh" style="color:var(--ink);font-size:15px">${fecha}</div>
       ${verCl?`<div class="subh">Clases</div><div class="tablewrap"><table class="grid" style="min-width:0"><tbody>
-      ${cl.map(c=>`<tr><td style="width:110px"><div class="txt num" style="color:var(--paid)">${esc(c.h)}–${esc(c.hf)}</div></td><td><button class="txt" data-edit-al="${c.a.id}" style="border:0;background:none;color:inherit;text-align:left;padding:0 10px;font-weight:600">${esc(c.a.nombre)}</button></td><td><div class="txt muted">${esc(c.a.curso||"")}</div></td></tr>`).join("")||`<tr><td><div class="empty" style="padding:12px">No hay clases este día.</div></td></tr>`}
+      ${cl.map(c=>`<tr><td style="width:110px"><div class="txt num" style="color:var(--paid)">${esc(c.h)}–${esc(c.hf)}</div></td><td><button class="txt" ${c.grupo?grAttr(c):`data-edit-al="${c.a.id}"`} style="border:0;background:none;color:inherit;text-align:left;padding:0 10px;font-weight:600">${esc(c.nombre)}</button></td><td><div class="txt muted">${esc(c.grupo?c.grupo.miembros.map(x=>x.nombre).join(", "):(c.a.curso||""))}</div></td></tr>`).join("")||`<tr><td><div class="empty" style="padding:12px">No hay clases este día.</div></td></tr>`}
       </tbody></table></div>`:""}
       ${verCu?`<div class="subh">Cuotas</div><div class="tablewrap"><table class="grid" style="min-width:0"><tbody>
       ${cu.map(a=>{const e=estado(a,y,m);return `<tr><td><button class="txt" data-edit-al="${a.id}" style="border:0;background:none;color:inherit;text-align:left;padding:0 10px;font-weight:600">${esc(a.nombre)}</button></td><td class="num" style="text-align:right;padding:0 10px">${fmt(a.cuota)}</td><td><button class="pill ${e}" data-cuota="${a.id}" data-ym="${mk(y,m)}">${estTxt[e]}</button></td></tr>`}).join("")||`<tr><td><div class="empty" style="padding:12px">Nadie paga este día.</div></td></tr>`}
