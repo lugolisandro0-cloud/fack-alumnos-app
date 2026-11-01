@@ -283,6 +283,12 @@ function parteDe(a, general) {
   if (p.tipo === "monto") return Math.max(0, Math.round(v));
   return Math.max(0, Math.round((Number(a.cuota) || 0) * v / 100));
 }
+// Moneda en la que está expresada esa parte: el monto fijo general es en pesos; lo demás, en la moneda del alumno.
+function parteMoneda(a, general) {
+  const propia = a.parteAdmin && (a.parteAdmin.tipo === "pct" || a.parteAdmin.tipo === "monto");
+  if (!propia && general.tipo === "monto") return "ARS";
+  return a.moneda || "ARS";
+}
 function esDelAdmin(d) { return d && (d.por === "admin" || d.por === "licha"); }
 
 // Qué ve el administrador de cada fila. null = no la ve.
@@ -296,6 +302,7 @@ function vistaAdmin(f, perm, general) {
     else o.cobra = Number(d.cuota) > 0;
     if (perm.verMontos) o.cuota = d.cuota;
     o.aCobrar = parteDe(d, general);
+    o.aCobrarMoneda = parteMoneda(d, general);
     return o;
   }
   if (f.col === "pagos") {
@@ -309,7 +316,7 @@ function vistaAdmin(f, perm, general) {
     return null;
   }
   if (f.col === "liquidaciones") return d;
-  if (f.col === "config") return f.id === "permisos" ? perm : null;
+  if (f.col === "config") return f.id === "permisos" ? perm : f.id === "cambio" ? d : null;
   return null;
 }
 
@@ -339,7 +346,7 @@ function cambioDelAdmin(st, c, perm, forzar) {
     const al = st.idx["alumnos|" + d.alumnoId];
     if (!al || al.deleted) return;
     const monto = perm.verMontos && Number(d.monto) > 0 ? Number(d.monto) : (Number(al.data.cuota) || 0);
-    guardar(st, "pagos", c.id, { alumnoId: d.alumnoId, mes: d.mes, fecha: d.fecha, medio: d.medio, monto: monto, por: "admin" }, false);
+    guardar(st, "pagos", c.id, { alumnoId: d.alumnoId, mes: d.mes, fecha: d.fecha, medio: d.medio, monto: monto, moneda: al.data.moneda || "ARS", por: "admin" }, false);
     return;
   }
   if (c.col === "gastos") {
@@ -770,14 +777,14 @@ function actualizarHojasLegibles(st) {
   const nombresUsuarios = { dueno: u.dueno ? u.dueno.nombre : "Dueño", admin: u.admin ? u.admin.nombre : "Administrador", felipe: "Felipe", licha: "Licha" };
   const DIAS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
   const general = parteGeneral(st);
-  escribirHoja("Alumnos", ["Nombre", "Curso", "Clases", "Cuota", "Paga el día", "Teléfono", "Estado", "Parte del administrador"],
+  escribirHoja("Alumnos", ["Nombre", "Curso", "Clases", "Cuota", "Moneda", "Paga el día", "Teléfono", "Estado", "Parte del administrador", "Moneda de la parte"],
     alumnos.sort(function (x, y) { return String(x.nombre).localeCompare(String(y.nombre)); }).map(function (a) {
-      return [a.nombre || "", (a.curso || "") + (grupoDe(a) ? " · " + grupoDe(a) : ""), clasesDe(a).map(function (c) { return DIAS[c.d - 1] + " " + c.h + "–" + c.hf; }).join(" · "), a.cuota || 0, a.diaPago || "", a.telefono || "",
-        a.activo === false ? "De baja" + (a.fin ? " desde " + a.fin : "") : "Activo", parteDe(a, general)];
+      return [a.nombre || "", (a.curso || "") + (grupoDe(a) ? " · " + grupoDe(a) : ""), clasesDe(a).map(function (c) { return DIAS[c.d - 1] + " " + c.h + "–" + c.hf; }).join(" · "), a.cuota || 0, a.moneda || "ARS", a.diaPago || "", a.telefono || "",
+        a.activo === false ? "De baja" + (a.fin ? " desde " + a.fin : "") : "Activo", parteDe(a, general), parteMoneda(a, general)];
     }));
-  escribirHoja("Pagos", ["Mes", "Alumno", "Monto", "Fecha", "Medio", "Registró"],
+  escribirHoja("Pagos", ["Mes", "Alumno", "Monto", "Moneda", "Fecha", "Medio", "Registró"],
     vivos("pagos").sort(function (x, y) { return String(y.fecha).localeCompare(String(x.fecha)); }).map(function (p) {
-      return [p.mes || "", nombres[p.alumnoId] || "(alumno borrado)", p.monto || 0, p.fecha || "", p.medio || "", nombresUsuarios[p.por] || ""];
+      return [p.mes || "", nombres[p.alumnoId] || "(alumno borrado)", p.monto || 0, p.moneda || "ARS", p.fecha || "", p.medio || "", nombresUsuarios[p.por] || ""];
     }));
   escribirHoja("Gastos", ["Fecha", "Concepto", "Categoría", "Monto", "Registró"],
     vivos("gastos").sort(function (x, y) { return String(y.fecha).localeCompare(String(x.fecha)); }).map(function (g) {

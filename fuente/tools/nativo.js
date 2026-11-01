@@ -286,12 +286,12 @@ async function agendarAvisosYa(){
   if(!puede("verCobros")||!avisosOn||permisoAvisos!=="granted"){await cancelarAvisos();return}
   await cancelarAvisos();
   const ahora=new Date(),t=today(),notifs=[],vm=puede("verMontos");let nid=1000;
-  const lista=arr=>arr.map(a=>vm?`${a.nombre} (${fmt(a.cuota)})`:a.nombre).join(", ");
+  const lista=arr=>arr.map(a=>vm?`${a.nombre} (${fmtM(a.cuota,monDe(a))})`:a.nombre).join(", ");
   for(let k=0;k<=30&&notifs.length<60;k++){
     const d=new Date(t.getFullYear(),t.getMonth(),t.getDate()+k),y=d.getFullYear(),m=d.getMonth();
     const vence=alumnos.filter(a=>activoEn(a,y,m)&&tieneCuota(a)&&!pagoDe(a,y,m)&&diaVence(a,y,m)===d.getDate());
     if(!vence.length)continue;
-    const total=vence.reduce((s,a)=>s+(a.cuota||0),0),cuanto=vm?fmt(total):`${vence.length} cuota${vence.length===1?"":"s"}`;
+    const mons=[...new Set(vence.map(monDe))],total=vence.reduce((s,a)=>s+(Number(a.cuota)||0),0),cuanto=vm&&mons.length===1?fmtM(total,mons[0]):vm?vence.map(a=>fmtM(a.cuota,monDe(a))).join(" + "):`${vence.length} cuota${vence.length===1?"":"s"}`;
     const antes=new Date(y,m,d.getDate()-1,9,0),hoy=new Date(y,m,d.getDate(),9,0);
     if(antes>ahora)notifs.push({id:nid++,title:`Mañana se cobran ${cuanto}`,body:lista(vence),schedule:{at:antes,allowWhileIdle:true}});
     if(hoy>ahora)notifs.push({id:nid++,title:`Hoy se cobran ${cuanto}`,body:lista(vence),schedule:{at:hoy,allowWhileIdle:true}});
