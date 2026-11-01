@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#0B0B12">
 <script>/* Actualizaciones: si hay una versión descargada más nueva que la instalada, se usa esa. */
 (function(){
-  var V="1.6.1";window.APP_VERSION=V;window.APP_BASE=window.APP_BASE||V;
+  var V="1.6.2";window.APP_VERSION=V;window.APP_BASE=window.APP_BASE||V;
   function cmp(a,b){a=String(a).split(".").map(Number);b=String(b).split(".").map(Number);for(var i=0;i<3;i++){var d=(a[i]||0)-(b[i]||0);if(d)return d>0?1:-1}return 0}
   window.cmpVersion=cmp;
   if(window.__fackSwap)return;
@@ -404,11 +404,25 @@ function puede(k){return true}
 function nombreAdmin(){return "el administrador"}
 function aAdmin(){const n=nombreAdmin();return n==="el administrador"?"al administrador":"a "+n}
 function parteGeneral(){return Object.assign({tipo:"pct",valor:0},config.parte||{})}
-function parteDe(a){
+function parteMon(a){
+  if(!esDueno())return a.aCobrarMoneda||monDe(a);
+  const propia=a.parteAdmin&&(a.parteAdmin.tipo==="pct"||a.parteAdmin.tipo==="monto");
+  return !propia&&parteGeneral().tipo==="monto"?"ARS":monDe(a);
+}
+function parteDe(a){return enPesos(parteOrig(a),parteMon(a))}
+function parteOrig(a){
   if(!esDueno())return Number(a.aCobrar)||0;
   const p=a.parteAdmin&&(a.parteAdmin.tipo==="pct"||a.parteAdmin.tipo==="monto")?a.parteAdmin:parteGeneral(),v=Number(p.valor)||0;
   return p.tipo==="monto"?Math.max(0,Math.round(v)):Math.max(0,Math.round((Number(a.cuota)||0)*v/100));
 }
+const MONEDAS={ARS:{s:"$",n:"Pesos"},USD:{s:"US$",n:"Dólares"},EUR:{s:"€",n:"Euros"}};
+const monDe=a=>MONEDAS[a&&a.moneda]?a.moneda:"ARS";
+const cotiz=mon=>mon==="ARS"||!MONEDAS[mon]?1:(Number(config.cambio&&config.cambio[mon])||0);
+const enPesos=(n,mon)=>(Number(n)||0)*cotiz(mon||"ARS");
+const fmtM=(n,mon)=>!mon||mon==="ARS"?fmt(n):MONEDAS[mon].s+" "+new Intl.NumberFormat("es-AR",{maximumFractionDigits:2}).format(Number(n)||0);
+const fmtKM=(n,mon)=>!mon||mon==="ARS"?fmtK(n):MONEDAS[mon].s+new Intl.NumberFormat("es-AR",{maximumFractionDigits:0}).format(Number(n)||0);
+const usaOtraMoneda=()=>alumnos.some(a=>monDe(a)!=="ARS");
+const faltaCotiz=()=>Object.keys(MONEDAS).filter(k=>k!=="ARS"&&alumnos.some(a=>monDe(a)===k&&activoEn(a,cur.y,cur.m))&&!cotiz(k));
 const parteTxt=p=>p&&p.tipo==="monto"?fmt(p.valor):`${Number(p&&p.valor)||0}%`;
 const tieneCuota=a=>Number(a.cuota)>0||a.cobra===true;
 const esDelAdmin=g=>g&&(g.por==="admin"||g.por==="licha");
@@ -435,9 +449,9 @@ const estTxt={paid:"Pagó",late:"Atrasado",today:"Vence hoy",tomorrow:"Vence ma�
 function resumenMes(y,m){
   const act=alumnos.filter(a=>activoEn(a,y,m));
   let esperado=0,cobrado=0,late=0,pend=0;
-  for(const a of act){esperado+=a.cuota||0;const p=pagoDe(a,y,m);if(p)cobrado+=p.monto||0;else{const e=estado(a,y,m);e==="late"?late++:pend++}}
+  for(const a of act){esperado+=enPesos(a.cuota,monDe(a));const p=pagoDe(a,y,m);if(p)cobrado+=enPesos(p.monto,p.moneda||monDe(a));else{const e=estado(a,y,m);e==="late"?late++:pend++}}
   const gas=gastos.filter(g=>g.fecha&&g.fecha.startsWith(mk(y,m))).reduce((s,g)=>s+(g.monto||0),0)+(esDueno()?liqMes(y,m).reduce((s,l)=>s+(Number(l.monto)||0),0):0);
-  return {act:act.length,esperado,cobrado,late,pend,gas,porCobrar:Math.max(0,esperado-act.filter(a=>pagoDe(a,y,m)).reduce((s,a)=>s+(a.cuota||0),0))};
+  return {act:act.length,esperado,cobrado,late,pend,gas,porCobrar:Math.max(0,esperado-act.filter(a=>pagoDe(a,y,m)).reduce((s,a)=>s+enPesos(a.cuota,monDe(a)),0))};
 }
 
 /* ---------- vistas ---------- */
@@ -464,7 +478,7 @@ function alertsHTML(){
   const t=today(),y=t.getFullYear(),m=t.getMonth(),out=[];
   const hoy=alumnos.filter(a=>estado(a,y,m)==="today"),man=alumnos.filter(a=>estado(a,y,m)==="tomorrow");
   const late=alumnos.filter(a=>estado(a,y,m)==="late");
-  const names=arr=>arr.map(a=>puede("verMontos")?`${esc(a.nombre)} (${fmt(a.cuota)})`:esc(a.nombre)).join(", ");
+  const names=arr=>arr.map(a=>puede("verMontos")?`${esc(a.nombre)} (${fmtM(a.cuota,monDe(a))})`:esc(a.nombre)).join(", ");
   if(!puede("verCobros")){hoy.length=0;man.length=0;late.length=0}
   if(late.length)out.push(`<div class="alert late"><p><b>Atrasados:</b> ${names(late)}</p></div>`);
   if(hoy.length)out.push(`<div class="alert today"><p><b>Cobran hoy:</b> ${names(hoy)}</p></div>`);
@@ -476,7 +490,7 @@ function alertsHTML(){
 function evHTML(a,y,m,full){
   const e=estado(a,y,m);
   const vm=puede("verMontos");
-  return `<span class="ev ${e}" role="button" tabindex="0" data-cuota="${a.id}" data-ym="${mk(y,m)}" title="${esc(a.nombre)}${vm?" · "+fmt(a.cuota):""} · ${estTxt[e]}"><span class="n">${esc(a.nombre)}</span>${full&&vm?`<span class="a">${fmtK(a.cuota||0)}</span>`:""}</span>`;
+  return `<span class="ev ${e}" role="button" tabindex="0" data-cuota="${a.id}" data-ym="${mk(y,m)}" title="${esc(a.nombre)}${vm?" · "+fmtM(a.cuota,monDe(a)):""} · ${estTxt[e]}"><span class="n">${esc(a.nombre)}</span>${full&&vm?`<span class="a">${fmtKM(a.cuota||0,monDe(a))}</span>`:""}</span>`;
 }
 function vCalMes(){
   const {y,m}=cur,first=new Date(y,m,1),start=(first.getDay()+6)%7,days=lastDay(y,m);
@@ -513,7 +527,7 @@ function vCalMes(){
       ${cl.map(c=>`<tr><td style="width:110px"><div class="txt num" style="color:var(--paid)">${esc(c.h)}–${esc(c.hf)}</div></td><td><button class="txt" ${c.grupo?grAttr(c):`data-edit-al="${c.a.id}"`} style="border:0;background:none;color:inherit;text-align:left;padding:0 10px;font-weight:600">${esc(c.nombre)}</button></td><td><div class="txt muted">${esc(c.grupo?c.grupo.miembros.map(x=>x.nombre).join(", "):(c.a.curso||""))}</div></td></tr>`).join("")||`<tr><td><div class="empty" style="padding:12px">No hay clases este día.</div></td></tr>`}
       </tbody></table></div>`:""}
       ${verCu?`<div class="subh">Cuotas</div><div class="tablewrap"><table class="grid" style="min-width:0"><tbody>
-      ${cu.map(a=>{const e=estado(a,y,m);return `<tr><td><button class="txt" data-edit-al="${a.id}" style="border:0;background:none;color:inherit;text-align:left;padding:0 10px;font-weight:600">${esc(a.nombre)}</button></td><td class="num" style="text-align:right;padding:0 10px">${fmt(a.cuota)}</td><td><button class="pill ${e}" data-cuota="${a.id}" data-ym="${mk(y,m)}">${estTxt[e]}</button></td></tr>`}).join("")||`<tr><td><div class="empty" style="padding:12px">Nadie paga este día.</div></td></tr>`}
+      ${cu.map(a=>{const e=estado(a,y,m);return `<tr><td><button class="txt" data-edit-al="${a.id}" style="border:0;background:none;color:inherit;text-align:left;padding:0 10px;font-weight:600">${esc(a.nombre)}</button></td><td class="num" style="text-align:right;padding:0 10px">${fmtM(a.cuota,monDe(a))}</td><td><button class="pill ${e}" data-cuota="${a.id}" data-ym="${mk(y,m)}">${estTxt[e]}</button></td></tr>`}).join("")||`<tr><td><div class="empty" style="padding:12px">Nadie paga este día.</div></td></tr>`}
       </tbody></table></div>`:""}
     </div>`;
   }
@@ -659,14 +673,14 @@ function vAlumnos(){
   let list=alumnos.filter(a=>verInactivos||a.activo!==false);
   if(buscar){const q=buscar.toLowerCase();list=list.filter(a=>(a.nombre+" "+(a.curso||"")+" "+(a.telefono||"")).toLowerCase().includes(q))}
   list.sort((a,b)=>(a.activo===false)-(b.activo===false)||a.nombre.localeCompare(b.nombre));
-  const tot=list.filter(a=>activoEn(a,y,m)).reduce((s,a)=>s+(a.cuota||0),0);
+  const tot=list.filter(a=>activoEn(a,y,m)).reduce((s,a)=>s+enPesos(a.cuota,monDe(a)),0);
   const opt=(arr,v)=>arr.map(o=>`<option ${o===v?"selected":""}>${o}</option>`).join("");
   const rows=list.map((a,i)=>{const e=estado(a,y,m);return `<tr class="${a.activo===false?"off":""}" data-id="${a.id}">
     <td class="rn">${i+1}</td>
     <td class="first"><input id="n-${a.id}" data-f="nombre" value="${esc(a.nombre)}" aria-label="Nombre"></td>
     <td><select id="c-${a.id}" data-f="curso" aria-label="Curso">${opt(CURSOS,a.curso)}</select></td>
     <td><button class="txt sched" data-edit-al="${a.id}" style="border:0;background:none;padding:0 10px;text-align:left;white-space:nowrap">${grupoDe(a)&&GRUPALES.includes(a.curso)?`<b style="color:var(--ink)">${esc(grupoDe(a))}</b> · `:""}${esc(horarioTxt(a))||'<span style="color:var(--accent)">+ Cargar horario</span>'}</button></td>
-    <td><input id="q-${a.id}" class="money" data-f="cuota" inputmode="numeric" value="${a.cuota||""}" aria-label="Cuota"></td>
+    <td><div style="display:flex;align-items:center">${monDe(a)!=="ARS"?`<span class="by" style="padding-left:8px">${MONEDAS[monDe(a)].s}</span>`:""}<input id="q-${a.id}" class="money" data-f="cuota" inputmode="numeric" value="${a.cuota||""}" aria-label="Cuota"></div></td>
     <td><input id="d-${a.id}" data-f="diaPago" type="number" min="1" max="31" value="${a.diaPago||""}" aria-label="Día de pago" style="text-align:center"></td>
     <td><input id="t-${a.id}" data-f="telefono" value="${esc(a.telefono||"")}" placeholder="—" aria-label="Teléfono"></td>
     <td>${e==="na"?`<span class="pill na">${a.activo===false?"De baja":"—"}</span>`:`<button class="pill ${e}" data-cuota="${a.id}" data-ym="${mk(y,m)}">${estTxt[e]}</button>`}</td>
@@ -686,7 +700,7 @@ function vAlumnos(){
           <td><input id="newTel" placeholder="Teléfono"></td>
           <td colspan="2"><button class="btn sm" id="newAdd" style="margin:0 8px">Seguir</button></td></tr>
       </tbody>
-      <tfoot><tr><td class="rn"></td><td colspan="3">${list.length} alumno${list.length===1?"":"s"}</td><td class="num" style="text-align:right">${fmt(tot)}</td><td colspan="4" class="muted" style="font-weight:500">por mes, alumnos activos</td></tr></tfoot>
+      <tfoot><tr><td class="rn"></td><td colspan="3">${list.length} alumno${list.length===1?"":"s"}</td><td class="num" style="text-align:right">${fmt(tot)}</td><td colspan="4" class="muted" style="font-weight:500">por mes, alumnos activos${usaOtraMoneda()?" · en pesos":""}</td></tr></tfoot>
     </table></div></div>
     <p class="foot" style="margin:0">Editá cualquier celda y se guarda sola. Tocá el estado del mes para registrar o deshacer el pago.</p>
   </div>`;
@@ -695,18 +709,18 @@ function vCobros(){
   const {y,m}=cur,key=mk(y,m);
   const hechos=Object.values(pagos).filter(p=>p.mes===key).map(p=>({...p,al:alumnos.find(a=>a.id===p.alumnoId)})).sort((a,b)=>(b.fecha||"").localeCompare(a.fecha||""));
   const falta=alumnos.filter(a=>activoEn(a,y,m)&&!pagoDe(a,y,m)).sort((a,b)=>diaVence(a,y,m)-diaVence(b,y,m));
-  const tot=hechos.reduce((s,p)=>s+(p.monto||0),0);
+  const tot=hechos.reduce((s,p)=>s+enPesos(p.monto,p.moneda||monDe(p.al)),0);
   return `<div style="display:flex;flex-direction:column;gap:14px">
     ${stripHTML()}
     <div class="cols">
     <div class="sheetbox"><div style="padding:12px 14px"><h2>Faltan pagar</h2></div><div class="tablewrap"><table class="grid" style="min-width:0">
       <thead><tr><th>Alumno</th><th>Vence</th><th style="text-align:right">Cuota</th><th></th></tr></thead><tbody>
-      ${falta.filter(tieneCuota).map(a=>{const e=estado(a,y,m);return `<tr><td><div class="txt"><b>${esc(a.nombre)}</b></div></td><td><span class="pill ${e}">${diaVence(a,y,m)}/${m+1}</span></td><td class="num" style="text-align:right;padding:0 10px">${puede("verMontos")?fmt(a.cuota):"—"}</td><td>${puede("registrarCobros")?`<button class="btn sm paid" style="margin:0 8px" data-cuota="${a.id}" data-ym="${key}">Cobrar</button>`:""}</td></tr>`}).join("")||`<tr><td colspan="4"><div class="empty">Todos pagaron este mes.</div></td></tr>`}
+      ${falta.filter(tieneCuota).map(a=>{const e=estado(a,y,m);return `<tr><td><div class="txt"><b>${esc(a.nombre)}</b></div></td><td><span class="pill ${e}">${diaVence(a,y,m)}/${m+1}</span></td><td class="num" style="text-align:right;padding:0 10px">${puede("verMontos")?fmtM(a.cuota,monDe(a)):"—"}</td><td>${puede("registrarCobros")?`<button class="btn sm paid" style="margin:0 8px" data-cuota="${a.id}" data-ym="${key}">Cobrar</button>`:""}</td></tr>`}).join("")||`<tr><td colspan="4"><div class="empty">Todos pagaron este mes.</div></td></tr>`}
     </tbody></table></div></div>
     <div class="sheetbox"><div style="padding:12px 14px"><h2>Cobrado en el mes</h2></div><div class="tablewrap"><table class="grid" style="min-width:0">
       <thead><tr><th>Fecha</th><th>Alumno</th><th>Medio</th><th>Registró</th><th style="text-align:right">Monto</th></tr></thead><tbody>
-      ${hechos.map(p=>`<tr><td><div class="txt num" style="font-weight:500">${p.fecha?parse(p.fecha).toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit"}):"—"}</div></td><td><button class="txt" style="border:0;background:none;padding:0 10px;text-align:left;font-weight:600" data-cuota="${p.alumnoId}" data-ym="${key}">${esc(p.al?p.al.nombre:"(alumno borrado)")}</button></td><td><div class="txt muted">${esc(p.medio||"")}</div></td><td><div class="txt by">${esc(quien(p.por))}</div></td><td class="num" style="text-align:right;padding:0 10px">${puede("verMontos")?fmt(p.monto):"—"}</td></tr>`).join("")||`<tr><td colspan="5"><div class="empty">Todavía no hay cobros este mes.</div></td></tr>`}
-    </tbody><tfoot><tr><td colspan="4">${puede("verMontos")?"Total":hechos.length+" cobros"}</td><td class="num" style="text-align:right">${puede("verMontos")?fmt(tot):""}</td></tr></tfoot></table></div></div>
+      ${hechos.map(p=>`<tr><td><div class="txt num" style="font-weight:500">${p.fecha?parse(p.fecha).toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit"}):"—"}</div></td><td><button class="txt" style="border:0;background:none;padding:0 10px;text-align:left;font-weight:600" data-cuota="${p.alumnoId}" data-ym="${key}">${esc(p.al?p.al.nombre:"(alumno borrado)")}</button></td><td><div class="txt muted">${esc(p.medio||"")}</div></td><td><div class="txt by">${esc(quien(p.por))}</div></td><td class="num" style="text-align:right;padding:0 10px">${puede("verMontos")?fmtM(p.monto,p.moneda||monDe(p.al)):"—"}</td></tr>`).join("")||`<tr><td colspan="5"><div class="empty">Todavía no hay cobros este mes.</div></td></tr>`}
+    </tbody><tfoot><tr><td colspan="4">${puede("verMontos")?"Total"+(hechos.some(p=>(p.moneda||monDe(p.al))!=="ARS")?" en pesos":""):hechos.length+" cobros"}</td><td class="num" style="text-align:right">${puede("verMontos")?fmt(tot):""}</td></tr></tfoot></table></div></div>
     </div></div>`;
 }
 function vGastos(){
@@ -744,7 +758,7 @@ function vMisPagos(){
     <div class="cols">
     <div class="sheetbox"><div style="padding:12px 14px"><h2>Tu parte por alumno</h2><div class="by">${esc(mesTxt)}</div></div><div class="tablewrap"><table class="grid" style="min-width:0">
       <thead><tr><th>Alumno</th><th>Curso</th><th style="text-align:right">Te corresponde</th></tr></thead><tbody>
-      ${act.map(a=>`<tr><td><button class="txt" data-edit-al="${a.id}" style="border:0;background:none;color:inherit;text-align:left;padding:0 10px;font-weight:600">${esc(a.nombre)}</button></td><td><div class="txt muted">${esc(a.curso||"")}</div></td><td class="num" style="text-align:right;padding:0 10px">${fmt(parteDe(a))}</td></tr>`).join("")||`<tr><td colspan="3"><div class="empty">No hay alumnos activos este mes.</div></td></tr>`}
+      ${act.map(a=>`<tr><td><button class="txt" data-edit-al="${a.id}" style="border:0;background:none;color:inherit;text-align:left;padding:0 10px;font-weight:600">${esc(a.nombre)}</button></td><td><div class="txt muted">${esc(a.curso||"")}</div></td><td class="num" style="text-align:right;padding:0 10px">${fmtM(parteOrig(a),parteMon(a))}</td></tr>`).join("")||`<tr><td colspan="3"><div class="empty">No hay alumnos activos este mes.</div></td></tr>`}
       </tbody><tfoot><tr><td colspan="2">Total del mes</td><td class="num" style="text-align:right">${fmt(corr)}</td></tr></tfoot></table></div></div>
     <div style="display:flex;flex-direction:column;gap:14px">
     <div class="sheetbox"><div style="padding:12px 14px"><h2>Pagos recibidos</h2><div class="by">${esc(mesTxt)}</div></div><div class="tablewrap"><table class="grid" style="min-width:0">
@@ -804,6 +818,23 @@ function panelPermisos(){
     const v=toNum($("#pgV").value);if($("#pgT").value==="pct"&&(v<0||v>100)){toast("El porcentaje tiene que estar entre 0 y 100.");return}
     put("config","permisos",np);put("config","parte",{tipo:$("#pgT").value,valor:v});closePanel();toast("Permisos guardados")};
 }
+function cotizHTML(){
+  const c=config.cambio||{},falta=faltaCotiz();
+  if(!usaOtraMoneda()&&!c.USD&&!c.EUR)return `<button class="btn sm ghost" id="cotizBtn" style="align-self:flex-start;margin-top:6px">Cobrar en dólares o euros</button>`;
+  return `<div class="kv"><span>Cotización${c.fecha?` <span class="by">(${esc(parse(c.fecha).toLocaleDateString("es-AR",{day:"numeric",month:"short"}))})</span>`:""}</span><span class="num">${c.USD?"US$ 1 = "+fmt(c.USD):""}${c.USD&&c.EUR?" · ":""}${c.EUR?"€ 1 = "+fmt(c.EUR):""}</span></div>
+    ${falta.length?`<div class="alert late"><p>Falta la cotización ${falta.map(k=>k==="USD"?"del dólar":"del euro").join(" y ")}: esas cuotas no se suman a los totales.</p></div>`:`<p class="by" style="margin:0">Los totales están en pesos, con esta cotización.</p>`}
+    <button class="btn sm ghost" id="cotizBtn" style="align-self:flex-start">Cambiar cotización</button>`;
+}
+function panelCotiz(){
+  const c=config.cambio||{};
+  panel(`<h2 style="font-size:24px">Cotización</h2>
+    <p class="muted" style="margin:0">Las cuotas en dólares o euros se pasan a pesos con estos valores para los totales, el resumen y lo que le corresponde ${esc(aAdmin())}. Cada alumno elige su moneda en su ficha, al lado de la cuota.</p>
+    <div class="two"><div class="field"><label for="cxU">US$ 1 =</label><input id="cxU" inputmode="decimal" placeholder="$ en pesos" value="${c.USD||""}"></div>
+      <div class="field"><label for="cxE">€ 1 =</label><input id="cxE" inputmode="decimal" placeholder="$ en pesos" value="${c.EUR||""}"></div></div>
+    <div class="actions"><button class="btn ghost" id="cxX">Cancelar</button><button class="btn" id="cxOk">Guardar</button></div>`);
+  $("#cxX").onclick=closePanel;
+  $("#cxOk").onclick=()=>{put("config","cambio",{USD:toNum($("#cxU").value)||0,EUR:toNum($("#cxE").value)||0,fecha:iso(today())});closePanel();toast("Cotización guardada")};
+}
 function vResumen(){
   if(!esDueno())return vMisPagos();
   const meses=[];for(let i=5;i>=0;i--){const d=new Date(cur.y,cur.m-i,1);meses.push({y:d.getFullYear(),m:d.getMonth()})}
@@ -832,6 +863,7 @@ function vResumen(){
       <div class="kv"><span>Resultado</span><span class="num">${fmt(r.cobrado-r.gas)}</span></div>
       <div class="kv"><span>Si pagan todos</span><span class="num">${fmt(r.esperado-r.gas)}</span></div>
       <div class="kv"><span>Cuota promedio</span><span class="num">${fmt(act.length?r.esperado/act.length:0)}</span></div>
+      ${cotizHTML()}
     </div>
     <div class="card"><h2>Promedio mensual</h2>
       <div class="kv"><span>Ingresos</span><span class="num" style="color:var(--paid)">${fmt(promI)}</span></div>
@@ -882,17 +914,17 @@ function abrirCuota(id,ym){
   const mesTxt=new Date(y,mm,1).toLocaleDateString("es-AR",{month:"long",year:"numeric"});
   panel(`<div class="toolbar"><div><div class="lbl">Cuota de ${mesTxt}</div><h2 style="font-size:19px">${esc(a.nombre)}</h2><div class="muted">${esc(a.curso||"")} · vence el ${diaVence(a,y,mm)}${a.telefono?" · "+esc(a.telefono):""}</div></div><span class="pill ${e}" style="margin:0">${estTxt[e]}</span></div>
     <button class="btn sm ghost" data-edit-al="${a.id}" style="align-self:flex-start">Ver ficha · horario · dar de baja</button>
-    ${p?`<div class="card" style="background:var(--paid-soft);border:0"><div class="kv"><span>Pagó</span><span class="num">${vm?fmt(p.monto):"Sí"}</span></div><div class="kv"><span>Fecha</span><span>${p.fecha?parse(p.fecha).toLocaleDateString("es-AR"):"—"}</span></div><div class="kv"><span>Medio</span><span>${esc(p.medio||"—")}</span></div><div class="kv"><span>Registró</span><span>${esc(quien(p.por))}</span></div></div>
+    ${p?`<div class="card" style="background:var(--paid-soft);border:0"><div class="kv"><span>Pagó</span><span class="num">${vm?fmtM(p.monto,p.moneda||monDe(a)):"Sí"}</span></div><div class="kv"><span>Fecha</span><span>${p.fecha?parse(p.fecha).toLocaleDateString("es-AR"):"—"}</span></div><div class="kv"><span>Medio</span><span>${esc(p.medio||"—")}</span></div><div class="kv"><span>Registró</span><span>${esc(quien(p.por))}</span></div></div>
       <div class="actions">${rc?`<button class="btn ghost" id="pUndo">Deshacer pago</button>`:""}<button class="btn" id="pClose">Listo</button></div>`
     :!rc?`<p class="muted" style="margin:0">Todavía no figura el pago de este mes.</p><div class="actions"><button class="btn" id="pClose">Listo</button></div>`
-    :`<div class="two">${vm?`<div class="field"><label for="pMonto">Monto</label><input id="pMonto" inputmode="numeric" value="${a.cuota||""}"></div>`:""}
+    :`<div class="two">${vm?`<div class="field"><label for="pMonto">Monto${monDe(a)!=="ARS"?" ("+MONEDAS[monDe(a)].n.toLowerCase()+")":""}</label><input id="pMonto" inputmode="numeric" value="${a.cuota||""}"></div>`:""}
       <div class="field"><label for="pFecha">Fecha de pago</label><input id="pFecha" type="date" value="${iso(today())}"></div></div>
       <div class="field"><label for="pMedio">Medio</label><select id="pMedio">${MEDIOS.map(x=>`<option>${x}</option>`).join("")}</select></div>
       <div class="actions"><button class="btn ghost" id="pClose">Cancelar</button><button class="btn paid" id="pOk">Registrar pago</button></div>`}`);
   $("#pClose").onclick=closePanel;
   if(p){if($("#pUndo"))$("#pUndo").onclick=()=>{del("pagos",key);closePanel();toast("Pago deshecho")}}
   else if($("#pOk"))$("#pOk").onclick=()=>{const monto=vm?toNum($("#pMonto").value):0;if(vm&&!monto){toast("Poné el monto que pagó.");return}
-    put("pagos",key,{alumnoId:id,mes:ym,monto,fecha:$("#pFecha").value||iso(today()),medio:$("#pMedio").value,por:yo.id,ejemplo:false});closePanel();toast(`Pago de ${a.nombre} registrado`)};
+    put("pagos",key,{alumnoId:id,mes:ym,monto,moneda:monDe(a),fecha:$("#pFecha").value||iso(today()),medio:$("#pMedio").value,por:yo.id,ejemplo:false});closePanel();toast(`Pago de ${a.nombre} registrado`)};
 }
 const isPhone=()=>{try{return matchMedia("(max-width:640px)").matches}catch(e){return false}};
 function vAlumnosPhone(){
@@ -901,14 +933,14 @@ function vAlumnosPhone(){
   if(buscar){const q=buscar.toLowerCase();list=list.filter(a=>(a.nombre+" "+(a.curso||"")+" "+(a.telefono||"")).toLowerCase().includes(q))}
   list.sort((a,b)=>(a.activo===false)-(b.activo===false)||a.nombre.localeCompare(b.nombre));
   const vm=puede("verMontos"),vc=puede("verCobros");
-  const tot=list.filter(a=>activoEn(a,y,m)).reduce((s,a)=>s+(vm?(a.cuota||0):parteDe(a)),0);
+  const tot=list.filter(a=>activoEn(a,y,m)).reduce((s,a)=>s+(vm?enPesos(a.cuota,monDe(a)):parteDe(a)),0);
   return `<div style="display:flex;flex-direction:column;gap:12px">
     <input class="search" id="buscar" placeholder="Buscar alumno, curso o teléfono" value="${esc(buscar)}" style="max-width:none">
     <div class="toolbar"><span class="by">${list.length} alumnos · ${vm?fmt(tot)+" por mes":"tu parte "+fmt(tot)+" por mes"}</span><label class="check"><input type="checkbox" id="verInac" ${verInactivos?"checked":""}> De baja</label></div>
     <div class="mlist">${list.map(a=>{const e=estado(a,y,m);return `<div class="mrow ${a.activo===false?"off":""}">
       <button class="av" data-edit-al="${a.id}" aria-label="Editar ${esc(a.nombre)}">${esc(inicial(a.nombre))}</button>
       <button data-edit-al="${a.id}" style="border:0;background:none;text-align:left;padding:0;min-width:0;color:inherit"><div class="t">${esc(a.nombre)}</div><div class="s">${esc(a.curso||"")}${vc?" · paga el "+(a.diaPago||"—"):""}${a.fin&&a.activo===false?" · baja desde "+esc(finTxt(a)):""}</div>${horarioTxt(a)?`<div class="sched">${esc(horarioTxt(a))}</div>`:`<div class="sched" style="color:var(--accent)">Sin horario</div>`}</button>
-      <div class="r">${vm?`<span class="num">${fmt(a.cuota)}</span>`:`<span class="num" title="Lo que te corresponde por mes">${fmt(parteDe(a))}</span><span class="by">tu parte</span>`}${!vc?(a.activo===false?`<span class="pill na">De baja</span>`:""):e==="na"?`<span class="pill na">${a.activo===false?"De baja":"—"}</span>`:`<button class="pill ${e}" data-cuota="${a.id}" data-ym="${mk(y,m)}">${estTxt[e]}</button>`}</div></div>`}).join("")||`<div class="empty">Todavía no hay alumnos. Tocá + para cargar el primero.</div>`}</div>
+      <div class="r">${vm?`<span class="num">${fmtM(a.cuota,monDe(a))}</span>`:`<span class="num" title="Lo que te corresponde por mes">${fmtM(parteOrig(a),parteMon(a))}</span><span class="by">tu parte</span>`}${!vc?(a.activo===false?`<span class="pill na">De baja</span>`:""):e==="na"?`<span class="pill na">${a.activo===false?"De baja":"—"}</span>`:`<button class="pill ${e}" data-cuota="${a.id}" data-ym="${mk(y,m)}">${estTxt[e]}</button>`}</div></div>`}).join("")||`<div class="empty">Todavía no hay alumnos. Tocá + para cargar el primero.</div>`}</div>
   </div>`;
 }
 function vGastosPhone(){
@@ -941,13 +973,13 @@ function alumnoPanel(a,pre){
   if(nuevo&&!edita){toast("No tenés permiso para cargar alumnos.");return}
   const pa=a.parteAdmin&&(a.parteAdmin.tipo==="pct"||a.parteAdmin.tipo==="monto")?a.parteAdmin:{tipo:"general",valor:""};
   const seccionCuota=dueno?`<div class="lbl" style="margin-top:4px">Cuota</div>
-    <div class="two"><div class="field"><label for="aQ">Cuota mensual</label><input id="aQ" inputmode="numeric" placeholder="45000" value="${a.cuota||""}"></div>
+    <div class="two"><div class="field"><label for="aQ">Cuota mensual</label><div style="display:flex;gap:6px"><select id="aMon" style="width:auto;flex:none">${Object.entries(MONEDAS).map(([k,v])=>`<option value="${k}" ${monDe(a)===k?"selected":""}>${v.s}</option>`).join("")}</select><input id="aQ" inputmode="numeric" placeholder="45000" value="${a.cuota||""}" style="flex:1;min-width:0"></div></div>
       <div class="field"><label for="aD">Paga el día</label><input id="aD" type="number" min="1" max="31" value="${a.diaPago||10}"></div></div>
     <div class="lbl" style="margin-top:4px">Pago ${esc(aAdmin())}</div>
     <div class="two"><div class="field"><label for="aPT">Cómo se calcula</label><select id="aPT"><option value="general" ${pa.tipo==="general"?"selected":""}>General (${esc(parteTxt(parteGeneral()))})</option><option value="pct" ${pa.tipo==="pct"?"selected":""}>Porcentaje propio</option><option value="monto" ${pa.tipo==="monto"?"selected":""}>Monto fijo</option></select></div>
       <div class="field"><label for="aPV" id="aPVl">${pa.tipo==="monto"?"Monto por mes":"Porcentaje"}</label><input id="aPV" inputmode="decimal" value="${pa.tipo==="general"?"":esc(pa.valor)}" ${pa.tipo==="general"?"disabled":""}></div></div>
     <p class="by" id="aPR" style="margin:0"></p>`
-    :`<div class="card" style="background:var(--head)"><div class="kv"><span>Tu parte por mes</span><span class="num" style="color:var(--paid)">${fmt(parteDe(a))}</span></div>${puede("verMontos")?`<div class="kv"><span>Cuota</span><span class="num">${fmt(a.cuota)}</span></div>`:""}${puede("verCobros")&&a.diaPago?`<div class="kv"><span>Paga el día</span><span>${a.diaPago}</span></div>`:""}</div>`;
+    :`<div class="card" style="background:var(--head)"><div class="kv"><span>Tu parte por mes</span><span class="num" style="color:var(--paid)">${fmtM(parteOrig(a),parteMon(a))}</span></div>${puede("verMontos")?`<div class="kv"><span>Cuota</span><span class="num">${fmtM(a.cuota,monDe(a))}</span></div>`:""}${puede("verCobros")&&a.diaPago?`<div class="kv"><span>Paga el día</span><span>${a.diaPago}</span></div>`:""}</div>`;
   panel(`<h2 style="font-size:24px">${nuevo?"Nuevo alumno":esc(a.nombre)}</h2>
     ${baja?`<div class="alert late"><p><b>De baja</b>${a.fin?" desde "+esc(finTxt(a)):""}. No aparece en el calendario ni en los cobros desde ese mes.</p></div>`:""}
     <div class="field"><label for="aN">Nombre y apellido</label><input id="aN" autocomplete="off" value="${esc(a.nombre)}"></div>
@@ -964,8 +996,8 @@ function alumnoPanel(a,pre){
   if(dueno){
     const calc=()=>{const t=$("#aPT").value,v=toNum($("#aPV").value),q=toNum($("#aQ").value);
       $("#aPV").disabled=t==="general";$("#aPVl").textContent=t==="monto"?"Monto por mes":"Porcentaje";
-      const p=t==="general"?parteGeneral():{tipo:t,valor:v};$("#aPR").textContent=`Le corresponde ${fmt(p.tipo==="monto"?(Number(p.valor)||0):Math.round(q*(Number(p.valor)||0)/100))} por mes`};
-    ["aPT","aPV","aQ"].forEach(i=>{$("#"+i).oninput=calc;$("#"+i).onchange=calc});calc();
+      const p=t==="general"?parteGeneral():{tipo:t,valor:v},mon=t==="general"&&p.tipo==="monto"?"ARS":$("#aMon").value;$("#aPVl").textContent=t==="monto"?`Monto por mes (${MONEDAS[$("#aMon").value].s})`:"Porcentaje";$("#aPR").textContent=`Le corresponde ${fmtM(p.tipo==="monto"?(Number(p.valor)||0):Math.round(q*(Number(p.valor)||0)/100),mon)} por mes`};
+    ["aPT","aPV","aQ","aMon"].forEach(i=>{$("#"+i).oninput=calc;$("#"+i).onchange=calc});calc();
   }
   $("#aC").addEventListener("change",()=>{$("#aGw").style.display=GRUPALES.includes($("#aC").value)?"":"none"});
   $("#aG").addEventListener("change",()=>{const g=$("#aG").value.trim(),m=alumnos.find(x=>x.id!==a.id&&GRUPALES.includes(x.curso)&&grupoDe(x)===g&&clasesDe(x).length);
@@ -979,7 +1011,7 @@ function alumnoPanel(a,pre){
   if($("#aOk"))$("#aOk").onclick=()=>{
     const clases=leerClases();if(!clasesValidas(clases))return;
     const grupo=GRUPALES.includes($("#aC").value)?$("#aG").value.replace(/\|/g,"/").trim():"";
-    const extra0=dueno?{cuota:toNum($("#aQ").value),diaPago:Math.min(31,Math.max(1,parseInt($("#aD").value)||10)),parteAdmin:$("#aPT").value==="general"?null:{tipo:$("#aPT").value,valor:toNum($("#aPV").value)}}:{};
+    const extra0=dueno?{moneda:$("#aMon").value,cuota:toNum($("#aQ").value),diaPago:Math.min(31,Math.max(1,parseInt($("#aD").value)||10)),parteAdmin:$("#aPT").value==="general"?null:{tipo:$("#aPT").value,valor:toNum($("#aPV").value)}}:{};
     const extra={...extra0,grupo};
     if(nuevo){if(crearAlumno($("#aN").value,$("#aC").value,extra,null,$("#aT").value,clases))closePanel();return}
     const nm=$("#aN").value.trim();if(!nm){toast("Escribí el nombre del alumno.");return}
@@ -1343,12 +1375,12 @@ async function agendarAvisosYa(){
   if(!puede("verCobros")||!avisosOn||permisoAvisos!=="granted"){await cancelarAvisos();return}
   await cancelarAvisos();
   const ahora=new Date(),t=today(),notifs=[],vm=puede("verMontos");let nid=1000;
-  const lista=arr=>arr.map(a=>vm?`${a.nombre} (${fmt(a.cuota)})`:a.nombre).join(", ");
+  const lista=arr=>arr.map(a=>vm?`${a.nombre} (${fmtM(a.cuota,monDe(a))})`:a.nombre).join(", ");
   for(let k=0;k<=30&&notifs.length<60;k++){
     const d=new Date(t.getFullYear(),t.getMonth(),t.getDate()+k),y=d.getFullYear(),m=d.getMonth();
     const vence=alumnos.filter(a=>activoEn(a,y,m)&&tieneCuota(a)&&!pagoDe(a,y,m)&&diaVence(a,y,m)===d.getDate());
     if(!vence.length)continue;
-    const total=vence.reduce((s,a)=>s+(a.cuota||0),0),cuanto=vm?fmt(total):`${vence.length} cuota${vence.length===1?"":"s"}`;
+    const mons=[...new Set(vence.map(monDe))],total=vence.reduce((s,a)=>s+(Number(a.cuota)||0),0),cuanto=vm&&mons.length===1?fmtM(total,mons[0]):vm?vence.map(a=>fmtM(a.cuota,monDe(a))).join(" + "):`${vence.length} cuota${vence.length===1?"":"s"}`;
     const antes=new Date(y,m,d.getDate()-1,9,0),hoy=new Date(y,m,d.getDate(),9,0);
     if(antes>ahora)notifs.push({id:nid++,title:`Mañana se cobran ${cuanto}`,body:lista(vence),schedule:{at:antes,allowWhileIdle:true}});
     if(hoy>ahora)notifs.push({id:nid++,title:`Hoy se cobran ${cuanto}`,body:lista(vence),schedule:{at:hoy,allowWhileIdle:true}});
@@ -1591,6 +1623,7 @@ document.addEventListener("click",ev=>{
     alumnoPanel(null,{nombre:nm,curso:$("#newCurso").value,cuota:toNum($("#newCuota").value)||"",diaPago:parseInt($("#newDia").value)||10,telefono:$("#newTel").value.trim()});return}
   if(T.id==="ngAdd"){const c=$("#ngC").value.trim(),mo=toNum($("#ngM").value);if(!c||!mo){toast("Completá concepto y monto.");return}
     put("gastos",uid(),{fecha:$("#ngF").value||iso(today()),concepto:c,categoria:$("#ngK").value,monto:mo,visibleAdmin:!!($("#ngV")&&$("#ngV").checked),por:yo.id,ejemplo:false});toast("Gasto cargado");setTimeout(()=>{const n=$("#ngC");if(n)n.focus()},0);return}
+  if(T.id==="cotizBtn"){panelCotiz();return}
   if(T.id==="icsBtn"){activarAvisos();return}
   if(T.id==="clearEx"){alumnos.filter(a=>a.ejemplo).forEach(a=>del("alumnos",a.id));Object.values(pagos).filter(p=>p.ejemplo).forEach(p=>del("pagos",p.id));gastos.filter(g=>g.ejemplo).forEach(g=>del("gastos",g.id));toast("Ejemplos borrados");return}
 });

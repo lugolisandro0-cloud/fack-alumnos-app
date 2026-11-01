@@ -1,6 +1,6 @@
 {
- "version": "1.6.1",
- "sha256": "7c9f607e01444d7224530c56223f8caaea388318fcefdd3f18fd3222c2059638",
- "notas": "Los ensambles se ven agrupados también en la vista Mes",
+ "version": "1.6.2",
+ "sha256": "bc865a2d248a80d9ab1379828e0208e83c1937ff459996184500a839aff1ab88",
+ "notas": "Moneda por alumno: pesos, dólares o euros",
  "base": "1.6.0"
 }
