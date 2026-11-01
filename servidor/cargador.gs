@@ -105,5 +105,6 @@ function borrarTrozos_(k) {
 function permisos_() {
   if (Date.now() > 0) return;
   SpreadsheetApp.getActiveSpreadsheet(); LockService.getScriptLock(); ContentService.createTextOutput("");
-  UrlFetchApp.fetch("https://example.com"); Calendar.Events.list("primary");
+  UrlFetchApp.fetch("https://example.com"); CalendarApp.getDefaultCalendar();
+  Calendar.Calendars.insert({}); Calendar.Calendars.get("x"); Calendar.Events.insert({}, "x"); Calendar.Events.list("x"); Calendar.Events.patch({}, "x", "y"); Calendar.Events.remove("x", "y"); Calendar.Acl.insert({}, "x");
 }
