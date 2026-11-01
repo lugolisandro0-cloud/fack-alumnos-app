@@ -4,6 +4,7 @@
   loaded=true;render();
   try{actualizacion.arranqueOk()}catch(e){}
   setTimeout(()=>actualizacion.revisar(false),4000);
+  setTimeout(()=>{try{if(usaOtraMoneda())cotizacionAuto()}catch(e){}},6000);
   setInterval(()=>{if(document.visibilityState==="visible")actualizacion.revisar(false)},6*3600*1000);
   // sincronización: al abrir, al volver a la app y cada minuto mientras está abierta (no hace nada sin sesión)
   setInterval(()=>{if(document.visibilityState==="visible")sync.ciclo()},30000);

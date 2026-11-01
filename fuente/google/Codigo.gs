@@ -373,6 +373,7 @@ function sincronizar(req, ses) {
       guardar(st, c.col, String(c.id), d, !!c.deleted);
     } else cambioDelAdmin(st, { col: c.col, id: String(c.id), data: c.data, deleted: c.deleted }, permAntes, forzar);
   });
+  try { actualizarCotizacion(st); } catch (err) { /* sin internet: queda la anterior */ }
   let cal;
   try { cal = sincronizarCalendario(st); }
   catch (err) { cal = { ok: false, error: String((err && err.message) || err) }; }
@@ -420,6 +421,21 @@ function asegurarCalendario() {
 
 function fmt(d, patron) { return Utilities.formatDate(d, TZ, patron); }
 function fechaLocal(texto) { return Utilities.parseDate(texto, TZ, "yyyy-MM-dd HH:mm"); }
+// Ejecutar UNA vez desde el editor (arriba elegí "autorizarCotizacion" > Ejecutar) para darle permiso a la cotización automática.
+function autorizarCotizacion() { const r = UrlFetchApp.fetch("https://api.bluelytics.com.ar/v2/latest"); Logger.log(r.getContentText().slice(0, 200)); }
+// Cotización automática del dólar y el euro (venta), una vez por día. Fuente: Bluelytics.
+function actualizarCotizacion(st) {
+  if (typeof UrlFetchApp === "undefined") return;
+  const c = configDe(st, "cambio");
+  if (c.auto === false || c.fecha === hoyTxt()) return;
+  const tipo = c.tipo === "oficial" ? "oficial" : "blue";
+  const r = UrlFetchApp.fetch("https://api.bluelytics.com.ar/v2/latest", { muteHttpExceptions: true });
+  if (r.getResponseCode() !== 200) return;
+  const j = JSON.parse(r.getContentText());
+  const usd = j[tipo] && Number(j[tipo].value_sell), eur = j[tipo + "_euro"] && Number(j[tipo + "_euro"].value_sell);
+  if (!(usd > 0)) return;
+  guardar(st, "config", "cambio", { USD: Math.round(usd), EUR: eur > 0 ? Math.round(eur) : (Number(c.EUR) || 0), fecha: hoyTxt(), auto: true, tipo: tipo }, false);
+}
 function hoyTxt() { return fmt(new Date(), "yyyy-MM-dd"); }
 function mesActual() { return fmt(new Date(), "yyyy-MM"); }
 

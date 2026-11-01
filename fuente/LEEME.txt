@@ -120,9 +120,13 @@ de los ensambles.
 =====================================================
 - En la ficha, al lado de "Cuota mensual", se elige $ / US$ / €.
 - Los cobros se registran en la moneda del alumno.
-- Resumen > "Cambiar cotización": el dueño pone cuánto vale US$ 1 y € 1 en
-  pesos. Con eso se pasan a pesos los totales, el resumen y lo que le
-  corresponde al administrador. Si falta la cotización, la app lo avisa.
+- La cotización es automática: una vez por día toma el dólar y el euro blue
+  (venta) de Bluelytics. En Resumen > "Cambiar cotización" se puede pasar a
+  oficial o ponerla a mano. Con ella se pasan a pesos los totales, el resumen y
+  lo que le corresponde al administrador.
+- Para que el servidor la actualice solo (también para el administrador),
+  después de pegar el Codigo.gs nuevo: en Apps Script, arriba elegí la función
+  "autorizarCotizacion" > Ejecutar > Revisar permisos > Permitir. Una sola vez.
 - El porcentaje del administrador sale en la moneda del alumno; el monto fijo
   general es en pesos.
 
