@@ -9,7 +9,8 @@
  */
 
 // ===== Ajustes =====
-const COMPARTIR_CON = "";                         // mail del administrador para compartirle el calendario (opcional), ej: "licha@gmail.com"
+const VERSION_SERVIDOR = "__VERSION_SERVIDOR__";
+const COMPARTIR_CON = (typeof AJUSTES !== "undefined" && AJUSTES && AJUSTES.COMPARTIR_CON) || ""; // mail del administrador para compartirle el calendario (opcional)
 const NOMBRE_CALENDARIO = "FACK Music · Clases";
 const TZ = "America/Argentina/Buenos_Aires";
 const CURSOS_GRUPALES = ["Ensambles"];

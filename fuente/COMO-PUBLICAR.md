@@ -8,3 +8,8 @@
 - Si el cambio necesita reinstalar la app (permisos o plugins nativos nuevos), subir `base` al número nuevo y compilar APK/escritorio de nuevo.
 - Si el cambio toca el servidor (`google/Codigo.gs`), Felipe tiene que pegarlo en su Apps Script (Implementar › Administrar implementaciones › Editar › Nueva versión).
 - Pruebas: `google/prueba.js`, `google/prueba-vincular.js` (servidor simulado).
+
+## Servidor
+- El dueño tiene pegado `google/cargador.gs` en Apps Script; baja `servidor/Codigo.gs` de este repo.
+- Para publicar un cambio del servidor: `tools/publicar-servidor.sh 1.6.4` (reemplaza `__VERSION_SERVIDOR__`, calcula el sha256, actualiza `servidor/version.json` y hace push). El cargador lo toma en ≤10 min; si falla, vuelve a la última versión que anduvo.
+- Probar antes: `node google/prueba.js`, `node google/prueba-cargador.js`.

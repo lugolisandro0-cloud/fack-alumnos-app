@@ -124,11 +124,29 @@ de los ensambles.
   (venta) de Bluelytics. En Resumen > "Cambiar cotización" se puede pasar a
   oficial o ponerla a mano. Con ella se pasan a pesos los totales, el resumen y
   lo que le corresponde al administrador.
-- Para que el servidor la actualice solo (también para el administrador),
-  después de pegar el Codigo.gs nuevo: en Apps Script, arriba elegí la función
-  "autorizarCotizacion" > Ejecutar > Revisar permisos > Permitir. Una sola vez.
+- El permiso para la cotización se da con el paso 3 de la sección 2f.
 - El porcentaje del administrador sale en la moneda del alumno; el monto fijo
   general es en pesos.
+
+=====================================================
+2f) SERVIDOR QUE SE ACTUALIZA SOLO (cargador)
+=====================================================
+Desde esta versión, en Apps Script va el archivo "cargador.gs" en lugar del
+Codigo.gs completo. Se pega UNA sola vez:
+1. Con la cuenta de Google de Felipe: la planilla > Extensiones > Apps Script.
+2. Borrá todo lo que hay en Código.gs y pegá el contenido de "cargador.gs".
+   (Si antes tenías un mail en COMPARTIR_CON, ponelo en AJUSTES.)
+   Guardá.
+3. Arriba elegí la función "autorizar" > Ejecutar > Revisar permisos > cuenta de
+   Felipe > Configuración avanzada > Ir a … > Permitir.
+   (Descarga el servidor y le da permiso para consultar la cotización.)
+4. Deploy > Manage deployments > lápiz > Version: New version > Deploy.
+   La dirección /exec no cambia.
+Desde ahí, el servidor busca versiones nuevas cada 10 minutos en el
+repositorio de la app y las usa solo. Si una versión falla, vuelve a la última
+que funcionó. Los datos (planilla, cuentas, contraseñas) no se tocan.
+Seguridad: quien controle el repositorio de GitHub puede cambiar lo que hacen
+la app y el servidor. Mantené esa cuenta con verificación en dos pasos.
 
 =====================================================
 3) QUÉ SE SINCRONIZA CON GOOGLE CALENDAR

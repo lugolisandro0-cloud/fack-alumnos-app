@@ -84,13 +84,16 @@ function crearEntorno(opts = {}) {
     }
     return out;
   }
-  const props = {};
+  const props = {}, cache = {};
   const ctx = {
     console,
     SpreadsheetApp: { getActive: () => ss },
     Utilities: { formatDate, parseDate, getUuid: () => require("crypto").randomUUID(), DigestAlgorithm: { SHA_256: "sha256" }, Charset: { UTF_8: "utf8" },
       computeDigest: (alg, txt) => Array.from(require("crypto").createHash("sha256").update(String(txt), "utf8").digest()), base64Encode: b => Buffer.from(b.map(x => x & 255)).toString("base64") },
-    PropertiesService: { getScriptProperties: () => ({ getProperty: k => props[k] ?? null, setProperty: (k, v) => { props[k] = String(v); }, deleteProperty: k => { delete props[k]; }, getProperties: () => ({ ...props }) }) },
+    PropertiesService: { getScriptProperties: () => ({ getProperty: k => props[k] ?? null, setProperty: (k, v) => { props[k] = String(v); }, deleteProperty: k => { delete props[k]; }, getProperties: () => ({ ...props }), setProperties: o => { for (const k in o) props[k] = String(o[k]); } }) },
+    CacheService: { getScriptCache: () => ({ get: k => cache[k] ?? null, put: (k, v) => { cache[k] = String(v); } }) },
+    UrlFetchApp: { fetch: (u) => { const f = opts.fuente && opts.fuente(u); return { getResponseCode: () => f == null ? 404 : 200, getContentText: () => f }; } },
+    Logger: { log: (...a) => (opts.log || (() => { }))(...a) },
     LockService: { getScriptLock: () => ({ tryLock: () => true, releaseLock() { } }) },
     ContentService: { MimeType: { JSON: "json" }, createTextOutput: t => ({ setMimeType() { return { texto: t }; } }) },
     Calendar
@@ -100,10 +103,10 @@ function crearEntorno(opts = {}) {
   class FakeDate extends RealDate { constructor(...a) { if (a.length === 0) super(ahora.getTime()); else super(...a); } static now() { return ahora.getTime(); } }
   ctx.Date = FakeDate;
   vm.createContext(ctx);
-  vm.runInContext(fs.readFileSync(__dirname + "/Codigo.gs", "utf8"), ctx);
+  vm.runInContext(fs.readFileSync(__dirname + (opts.cargador ? "/cargador.gs" : "/Codigo.gs"), "utf8"), ctx);
   const api = {
     post: body => JSON.parse(ctx.doPost({ postData: { contents: JSON.stringify(body) } }).texto),
-    events, sheets, props,
+    events, sheets, props, cache, ctx,
     setAhora: d => { ahora = new Date(d); },
     // ediciones "a mano" en Google Calendar
     gcalMover: (id, h, hf, fecha) => { const ev = events[id]; const f = fecha || ev.start.dateTime.slice(0, 10); ev.start.dateTime = f + "T" + h + ":00"; ev.end.dateTime = f + "T" + hf + ":00"; tocar(ev); },
