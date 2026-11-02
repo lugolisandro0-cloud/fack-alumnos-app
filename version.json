@@ -1,6 +1,6 @@
 {
- "version": "1.6.3",
- "sha256": "414dd08d39dddc9b2ae8ea8be63fc3a3ea557e8e6ff8728b2ebc0ee69978bf78",
- "notas": "Cotización automática del dólar y el euro",
+ "version": "1.6.4",
+ "sha256": "8009808cd1a41c301f75f53863fa1b8e398bfa94052d554e68fc651e27559509",
+ "notas": "Se puede instalar en iPhone desde Safari",
  "base": "1.6.0"
 }
