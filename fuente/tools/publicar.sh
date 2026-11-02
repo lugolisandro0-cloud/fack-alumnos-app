@@ -7,6 +7,8 @@ cd /home/claude/alumnos-app
 APP_VERSION="$V" UPD_BASE="https://raw.githubusercontent.com/lugolisandro0-cloud/fack-alumnos-app/main/" python3 tools/build_www.py
 R=/home/claude/fack-alumnos-app
 cp www/index.html "$R/index.html"
+for f in fonts logo.png qrcode.js jsQR.js icono-180.png icono-192.png icono-512.png manifest.webmanifest; do cp -r "www/$f" "$R/"; done
+touch "$R/.nojekyll"
 python3 - "$V" "$NOTAS" "$BASE" <<'P'
 import hashlib,json,sys
 h=open("/home/claude/fack-alumnos-app/index.html","rb").read()

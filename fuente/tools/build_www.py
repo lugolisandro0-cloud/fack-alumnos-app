@@ -43,6 +43,12 @@ head='''<!doctype html>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#0B0B12">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icono-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Alumnos">
 <script>'''+open('/home/claude/alumnos-app/tools/cargador.js').read().replace('__VERSION__',VERSION)+'''</script>
 <script src="qrcode.js"></script>
 <script src="jsQR.js"></script>
