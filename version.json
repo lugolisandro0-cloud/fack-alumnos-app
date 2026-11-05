@@ -1,6 +1,6 @@
 {
- "version": "1.6.5",
- "sha256": "7de23eb54b06fc049efb5709a8fe0c02008246e895941bfe91fd5188fec19ef0",
- "notas": "Clases y ensambles de una sola fecha",
+ "version": "1.6.6",
+ "sha256": "f3e1d883dfcd897372b3462ac8354695b65ebfe41bb7fde05f76a85cab39295d",
+ "notas": "Ensambles de una sola fecha: se ocultan las series viejas",
  "base": "1.6.0"
 }
