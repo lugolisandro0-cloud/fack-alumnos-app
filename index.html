@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-title" content="Alumnos">
 <script>/* Actualizaciones: si hay una versión descargada más nueva que la instalada, se usa esa. */
 (function(){
-  var V="1.6.4";window.APP_VERSION=V;window.APP_BASE=window.APP_BASE||V;
+  var V="1.6.5";window.APP_VERSION=V;window.APP_BASE=window.APP_BASE||V;
   function cmp(a,b){a=String(a).split(".").map(Number);b=String(b).split(".").map(Number);for(var i=0;i<3;i++){var d=(a[i]||0)-(b[i]||0);if(d)return d>0?1:-1}return 0}
   window.cmpVersion=cmp;
   if(window.__fackSwap)return;
@@ -138,6 +138,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 .seg{display:inline-flex;border:2px solid var(--line2);border-radius:999px;padding:2px;gap:2px}
 .seg button{border:0;background:none;color:var(--muted);border-radius:999px;padding:6px 14px;font-family:var(--f-cond);font-weight:700;font-size:13px;letter-spacing:.12em;text-transform:uppercase}
 .seg button[aria-pressed="true"]{background:var(--accent);color:#fff}
+.clw{display:flex;flex-direction:column;gap:6px;padding:8px 0;border-bottom:1px dashed var(--line2)}.clw .clrep{width:auto;align-self:flex-start;font-size:14px;padding:6px 10px}
 .clrow{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr) 40px;gap:8px;align-items:end}
 .clrow .x{height:42px;border:2px solid var(--line2);border-radius:8px;background:none;color:var(--muted);font-size:16px}
 .sched{font-size:12.5px;color:var(--paid);font-family:var(--f-cond);font-weight:700;letter-spacing:.04em}
@@ -438,8 +439,10 @@ function correspondeAdmin(y,m){return alumnos.filter(a=>activoEn(a,y,m)).reduce(
 /* ---------- lógica de cuotas ---------- */
 const activoEn=(a,y,m)=>{const k=mk(y,m);if(a.inicio&&a.inicio>k)return false;if(a.fin)return k<a.fin;return a.activo!==false};
 const DIAS=["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"],DIAS_L=["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"];
-const clasesDe=a=>Array.isArray(a.clases)?a.clases.filter(c=>c&&c.d>=1&&c.d<=7).map(c=>{const h=c.h||"18:00";let hf=c.hf;if(!hf){const t=(+h.split(":")[0])*60+(+h.split(":")[1]||0)+(c.dur||60);hf=String(Math.min(23*60+59,t)/60|0).padStart(2,"0")+":"+String(Math.min(23*60+59,t)%60).padStart(2,"0")}return {id:c.id||"",d:c.d,h,hf}}):[];
-const horarioTxt=a=>{const c=clasesDe(a).slice().sort((x,y)=>x.d-y.d||String(x.h).localeCompare(String(y.h)));return c.length?c.map(x=>`${DIAS[x.d-1]} ${x.h}–${x.hf}`.trim()).join(" · "):""};//||""}`.trim()).join(" · "):""};
+const clasesDe=a=>Array.isArray(a.clases)?a.clases.filter(c=>c&&c.d>=1&&c.d<=7).map(c=>{const h=c.h||"18:00";let hf=c.hf;if(!hf){const t=(+h.split(":")[0])*60+(+h.split(":")[1]||0)+(c.dur||60);hf=String(Math.min(23*60+59,t)/60|0).padStart(2,"0")+":"+String(Math.min(23*60+59,t)%60).padStart(2,"0")}const f=/^\d{4}-\d{2}-\d{2}$/.test(String(c.f||""))?String(c.f):"";return {id:c.id||"",d:f?(parse(f).getDay()+6)%7+1:c.d,h,hf,f}}):[];
+const enDia=(c,D,wd)=>c.f?c.f===iso(D):c.d===wd;
+const fechaCorta=f=>{const D=parse(f);return D.getDate()+"/"+(D.getMonth()+1)};
+const horarioTxt=a=>{const c=clasesDe(a).slice().sort((x,y)=>(x.f?1:0)-(y.f?1:0)||String(x.f).localeCompare(String(y.f))||x.d-y.d||String(x.h).localeCompare(String(y.h)));return c.length?c.map(x=>`${DIAS[x.d-1]}${x.f?" "+fechaCorta(x.f):""} ${x.h}–${x.hf}`.trim()).join(" · "):""};//||""}`.trim()).join(" · "):""};
 const finTxt=a=>a.fin?new Date(+a.fin.slice(0,4),+a.fin.slice(5,7)-1,1).toLocaleDateString("es-AR",{month:"long",year:"numeric"}):"";
 let calVer="todo";
 const diaVence=(a,y,m)=>Math.min(Math.max(1,a.diaPago||10),lastDay(y,m));
@@ -504,12 +507,12 @@ function vCalMes(){
   const SD=selDay??(isPhone()&&isCur?t.getDate():null);
   const act=alumnos.filter(a=>activoEn(a,y,m));
   const byDay={};for(const a of act){if(!puede("verCobros")||!tieneCuota(a))continue;const d=diaVence(a,y,m);(byDay[d]=byDay[d]||[]).push(a)}
-  const clasesDia=d=>{const wd=(new Date(y,m,d).getDay()+6)%7+1,out=[],gr={};for(const a of act)for(const c of clasesDe(a))if(c.d===wd){
-      if(GRUPALES.includes(a.curso)){const g=grupoDe(a),k=`${a.curso}|${wd}|${c.h}|${c.hf}|${g}`;if(!gr[k]){gr[k]={curso:a.curso,wd,h:c.h,hf:c.hf,g,miembros:[]};out.push({grupo:gr[k],h:c.h,hf:c.hf,nombre:""})}gr[k].miembros.push(a)}
+  const clasesDia=d=>{const D0=new Date(y,m,d),wd=(D0.getDay()+6)%7+1,out=[],gr={};for(const a of act)for(const c of clasesDe(a))if(enDia(c,D0,wd)){
+      if(GRUPALES.includes(a.curso)){const g=grupoDe(a),k=`${a.curso}|${wd}|${c.h}|${c.hf}|${g}|${c.f}`;if(!gr[k]){gr[k]={curso:a.curso,wd,h:c.h,hf:c.hf,g,f:c.f,miembros:[]};out.push({grupo:gr[k],h:c.h,hf:c.hf,nombre:""})}gr[k].miembros.push(a)}
       else out.push({a,h:c.h,hf:c.hf,nombre:a.nombre})}
     for(const o of out)if(o.grupo){o.grupo.miembros.sort((p,q)=>p.nombre.localeCompare(q.nombre));o.nombre=tituloGrupo(o.grupo.curso,o.grupo.g,o.grupo.miembros.length)}
     return out.sort((p,q)=>p.h.localeCompare(q.h)||p.nombre.localeCompare(q.nombre))};
-  const grAttr=c=>`data-grupo="${esc(c.grupo.curso)}|${c.grupo.wd}|${c.grupo.h}|${c.grupo.hf}|${esc(c.grupo.g||"")}"`;
+  const grAttr=c=>`data-grupo="${esc(c.grupo.curso)}|${c.grupo.wd}|${c.grupo.h}|${c.grupo.hf}|${esc(c.grupo.g||"")}|${c.grupo.f||""}"`;
   const verCl=calVer!=="cuotas",verCu=calVer!=="clases";
   let cells="";const total=Math.ceil((start+days)/7)*7;
   for(let i=0;i<total;i++){
@@ -563,8 +566,8 @@ function anclaCal(){
 }
 function clasesFecha(D){
   const y=D.getFullYear(),m=D.getMonth(),wd=(D.getDay()+6)%7+1,out=[],grupos={};
-  for(const a of alumnos){if(!activoEn(a,y,m))continue;for(const c of clasesDe(a))if(c.d===wd){
-    if(GRUPALES.includes(a.curso)){const g=grupoDe(a),k=`${a.curso}|${wd}|${c.h}|${c.hf}|${g}`;(grupos[k]=grupos[k]||{curso:a.curso,wd,h:c.h,hf:c.hf,g,miembros:[]}).miembros.push(a)}
+  for(const a of alumnos){if(!activoEn(a,y,m))continue;for(const c of clasesDe(a))if(enDia(c,D,wd)){
+    if(GRUPALES.includes(a.curso)){const g=grupoDe(a),k=`${a.curso}|${wd}|${c.h}|${c.hf}|${g}|${c.f}`;(grupos[k]=grupos[k]||{curso:a.curso,wd,h:c.h,hf:c.hf,g,f:c.f,miembros:[]}).miembros.push(a)}
     else out.push({a,s:aMin(c.h),e:aMin(c.hf),t:a.nombre,sub:a.curso||"",color:colorCurso(a.curso)})}}
   for(const g of Object.values(grupos)){g.miembros.sort((p,q)=>p.nombre.localeCompare(q.nombre));out.push({grupo:g,s:aMin(g.h),e:aMin(g.hf),t:tituloGrupo(g.curso,g.g,g.miembros.length),sub:g.miembros.map(x=>x.nombre).join(", "),color:colorCurso(g.curso)})}
   return out;
@@ -579,36 +582,35 @@ function eventosDesdeGoogle(lista,D){
     const s=aMin(ev.s.slice(11,16)),e=ev.e&&ev.e.slice(0,10)===f?aMin(ev.e.slice(11,16)):24*60;
     const partes=String(ev.clave||"").split("|");let o={s,e:Math.max(e,s+15),t:ev.t||"(sin título)",sub:"",color:"#8E8EA0",gev:ev.id};
     if(partes[0]==="a"){const a=alumnos.find(x=>x.id===partes[1]);if(a)o={...o,a,t:a.nombre,sub:a.curso||"",color:colorCurso(a.curso)}}
-    else if(partes[0]==="g"){const [,curso,wd,h,hf]=partes,g=partes[5]||"",y=D.getFullYear(),m=D.getMonth();
-      const miembros=alumnos.filter(a=>a.curso===curso&&grupoDe(a)===g&&activoEn(a,y,m)&&clasesDe(a).some(c=>String(c.d)===wd&&c.h===h&&c.hf===hf)).sort((p,q)=>p.nombre.localeCompare(q.nombre));
-      o={...o,grupo:{curso,wd:+wd,h,hf,g,miembros},t:tituloGrupo(curso,g,miembros.length),sub:miembros.map(x=>x.nombre).join(", "),color:colorCurso(curso)}}
+    else if(partes[0]==="g"){const [,curso,wd,h,hf]=partes,g=partes[5]||"",f=partes[6]||"",y=D.getFullYear(),m=D.getMonth();
+      const miembros=alumnos.filter(a=>a.curso===curso&&grupoDe(a)===g&&activoEn(a,y,m)&&clasesDe(a).some(c=>String(c.d)===wd&&c.h===h&&c.hf===hf&&c.f===f)).sort((p,q)=>p.nombre.localeCompare(q.nombre));
+      o={...o,grupo:{curso,wd:+wd,h,hf,g,f,miembros},t:tituloGrupo(curso,g,miembros.length),sub:miembros.map(x=>x.nombre).join(", "),color:colorCurso(curso)}}
     out.push(o);
   }
   return out;
 }
-function verGrupo(curso,wd,h,hf,g=""){
-  const t=today(),enSlot=a=>a.curso===curso&&grupoDe(a)===g&&clasesDe(a).some(c=>c.d===wd&&c.h===h&&c.hf===hf);
+function verGrupo(curso,wd,h,hf,g="",f=""){
+  const t=today(),mismo=c=>c.d===wd&&c.h===h&&c.hf===hf&&c.f===f,enSlot=a=>a.curso===curso&&grupoDe(a)===g&&clasesDe(a).some(mismo);
   const miembros=alumnos.filter(a=>a.activo!==false&&enSlot(a)).sort((p,q)=>p.nombre.localeCompare(q.nombre));
   const edita=esDueno()||puede("editarAlumnos");
-  panel(`<div class="lbl">${esc(DIAS_L[wd-1])} · ${esc(h)}–${esc(hf)} · ${esc(curso)}</div><h2 style="font-size:24px">${esc(g||curso)}</h2>
+  panel(`<div class="lbl">${f?esc(parse(f).toLocaleDateString("es-AR",{weekday:"long",day:"numeric",month:"long"}))+" (solo ese día)":esc(DIAS_L[wd-1])} · ${esc(h)}–${esc(hf)} · ${esc(curso)}</div><h2 style="font-size:24px">${esc(g||curso)}</h2>
     ${edita?`<div class="two"><div class="field"><label for="gN">Nombre del ensamble</label><input id="gN" placeholder="Ej.: Ensamble 1" value="${esc(g)}"></div><div class="field" style="justify-content:flex-end"><button class="btn sm ghost" id="gNok" style="align-self:flex-start;margin-top:auto">Cambiar nombre</button></div></div>`:""}
     <div class="mlist">${miembros.map(a=>{const e=puede("verCobros")?estado(a,t.getFullYear(),t.getMonth()):"na";return `<div class="mrow"><button class="av" data-edit-al="${a.id}" aria-label="Ficha de ${esc(a.nombre)}">${esc(inicial(a.nombre))}</button><button data-edit-al="${a.id}" style="border:0;background:none;text-align:left;padding:0;min-width:0;color:inherit"><div class="t">${esc(a.nombre)}</div><div class="s">${a.telefono?esc(a.telefono):"Sin teléfono"}</div></button><div class="r">${e==="na"?"":`<button class="pill ${e}" data-cuota="${a.id}" data-ym="${mk(t.getFullYear(),t.getMonth())}">${estTxt[e]}</button>`}${edita?`<button class="btn sm ghost" data-gquitar="${a.id}" title="Sacar del ensamble" style="margin-left:6px">Sacar</button>`:""}</div></div>`}).join("")||`<div class="empty">No quedan integrantes en este horario.</div>`}</div>
     ${edita?`<div class="field"><label for="gSel">Agregar un alumno que ya está cargado</label><div style="display:flex;gap:8px"><select id="gSel" style="flex:1"><option value="">Elegí un alumno…</option>${alumnos.filter(a=>a.activo!==false&&!enSlot(a)).sort((p,q)=>p.nombre.localeCompare(q.nombre)).map(a=>`<option value="${a.id}">${esc(a.nombre)}${a.curso?" · "+esc(a.curso):""}</option>`).join("")}</select><button class="btn sm" id="gSelOk">Agregar</button></div></div>`:""}
     <div class="actions"><button class="btn ghost" id="gX">Cerrar</button>${edita?`<button class="btn" id="gAdd">+ Alumno nuevo</button>`:""}</div>`);
   $("#gX").onclick=closePanel;
   if(!edita)return;
-  const reabrir=ng=>setTimeout(()=>verGrupo(curso,wd,h,hf,ng),60);
-  $("#gAdd").onclick=()=>alumnoPanel(null,{curso,grupo:g,clases:[{d:wd,h,hf}]});
+  const reabrir=ng=>setTimeout(()=>verGrupo(curso,wd,h,hf,ng,f),60);
+  $("#gAdd").onclick=()=>alumnoPanel(null,{curso,grupo:g,clases:[{d:wd,h,hf,f}]});
   $("#gSelOk").onclick=()=>{const a=alumnos.find(x=>x.id===$("#gSel").value);if(!a){toast("Elegí un alumno de la lista.");return}
-    const otras=clasesDe(a).filter(c=>!(c.d===wd&&c.h===h&&c.hf===hf)&&!GRUPALES.includes(a.curso));
-    const nuevaClase={id:uid(),d:wd,h,hf};
+    const nuevaClase={id:uid(),d:wd,h,hf,...(f?{f}:{})};
     // Si ya era de otro curso, pasa a este ensamble con este horario (sus otras clases individuales se quitan para no duplicar).
-    put("alumnos",a.id,{...strip(a),curso,grupo:g,clases:GRUPALES.includes(a.curso)?[...clasesDe(a).filter(c=>!(c.d===wd&&c.h===h&&c.hf===hf)),nuevaClase]:[nuevaClase]});
+    put("alumnos",a.id,{...strip(a),curso,grupo:g,clases:GRUPALES.includes(a.curso)?[...clasesDe(a).filter(c=>!mismo(c)),nuevaClase]:[nuevaClase]});
     toast(`${a.nombre} se sumó a ${g||curso}`);reabrir(g)};
   document.querySelectorAll("[data-gquitar]").forEach(b=>b.onclick=()=>{const a=alumnos.find(x=>x.id===b.dataset.gquitar);if(!a)return;
-    put("alumnos",a.id,{...strip(a),clases:clasesDe(a).filter(c=>!(c.d===wd&&c.h===h&&c.hf===hf))});toast(`${a.nombre} ya no está en este horario`);reabrir(g)});
+    put("alumnos",a.id,{...strip(a),clases:clasesDe(a).filter(c=>!mismo(c))});toast(`${a.nombre} ya no está en este horario`);reabrir(g)});
   $("#gNok").onclick=()=>{const ng=$("#gN").value.replace(/\|/g,"/").trim();if(ng===g)return;
-    if(ng&&alumnos.some(a=>a.curso===curso&&grupoDe(a)===ng&&!enSlot(a)&&clasesDe(a).some(c=>c.d===wd&&c.h===h&&c.hf===hf))){toast("Ya hay un ensamble con ese nombre en este horario.");return}
+    if(ng&&alumnos.some(a=>a.curso===curso&&grupoDe(a)===ng&&!enSlot(a)&&clasesDe(a).some(mismo))){toast("Ya hay un ensamble con ese nombre en este horario.");return}
     for(const a of miembros)put("alumnos",a.id,{...strip(a),grupo:ng});toast("Nombre guardado");reabrir(ng)};
 }
 function cuotasFecha(D){const y=D.getFullYear(),m=D.getMonth();return puede("verCobros")?alumnos.filter(a=>activoEn(a,y,m)&&tieneCuota(a)&&diaVence(a,y,m)===D.getDate()):[]}
@@ -659,7 +661,7 @@ function vCalAgenda(){
   const columnas=datos.map(x=>{
     let slots="";for(let m=h0;m<h1;m+=60)slots+=`<button class="slot" style="top:${(m-h0)/60*PX}px;height:${PX}px" data-slot="${iso(x.D)}|${deMin(m)}" aria-label="Agregar clase ${DIAS[(x.D.getDay()+6)%7]} ${deMin(m)}"></button>`;
     const evs=x.cl.map(e=>{const top=(e.s-h0)/60*PX,h=Math.max(20,(e.e-e.s)/60*PX-2),w=100/e.n,corto=h<40;
-      const dest=e.a?`data-edit-al="${e.a.id}"`:e.grupo?`data-grupo="${esc(e.grupo.curso)}|${e.grupo.wd}|${e.grupo.h}|${e.grupo.hf}|${esc(e.grupo.g||"")}"`:`data-gev="${esc(e.gev||"")}"`;
+      const dest=e.a?`data-edit-al="${e.a.id}"`:e.grupo?`data-grupo="${esc(e.grupo.curso)}|${e.grupo.wd}|${e.grupo.h}|${e.grupo.hf}|${esc(e.grupo.g||"")}|${e.grupo.f||""}"`:`data-gev="${esc(e.gev||"")}"`;
       return `<button class="wk-ev ${corto?"corto":""} ${e.grupo?"grp":""}" ${dest} style="top:${top}px;height:${h}px;left:calc(${e.lane*w}% + 2px);width:calc(${w}% - 4px);--c:${e.color}" title="${esc(e.t)} · ${deMin(e.s)}–${deMin(e.e)}${e.sub?" · "+esc(e.sub):""}"><span class="en">${esc(e.t)}</span><span class="et">${deMin(e.s)}–${deMin(e.e)}${!corto&&e.sub?" · "+esc(e.sub):""}</span></button>`}).join("");
     let linea="";if(esHoy(x.D)){const nm=ahora.getHours()*60+ahora.getMinutes();if(nm>=h0&&nm<=h1)linea=`<div class="ahora" style="top:${(nm-h0)/60*PX}px"></div>`}
     return `<div class="wk-col ${esHoy(x.D)?"hoy":""}" style="height:${alto}px;background-size:100% ${PX}px">${slots}${evs}${linea}</div>`}).join("");
@@ -977,17 +979,22 @@ const HORAS=(()=>{const o=[];for(let h=7;h<=23;h++)for(const mm of ["00","15","3
 function claseRowHTML(c,i){
   const h=c.h||"18:00",hf=c.hf||"19:00";
   const op=(v)=>HORAS.concat(HORAS.includes(v)?[]:[v]).sort().map(x=>`<option ${x===v?"selected":""}>${esc(x)}</option>`).join("");
-  return `<div class="clrow" data-clrow data-clid="${esc(c.id||uid())}">
-    <div class="field"><label for="clD${i}">Día</label><select id="clD${i}" data-cd>${DIAS_L.map((n,k)=>`<option value="${k+1}" ${c.d===k+1?"selected":""}>${n}</option>`).join("")}</select></div>
+  const un=!!c.f,fs=c.f||c.fs||"";
+  return `<div class="clw" data-clrow data-clid="${esc(c.id||uid())}">
+    <select class="clrep" data-cr aria-label="Cada cuánto"><option value="sem" ${un?"":"selected"}>Todas las semanas</option><option value="dia" ${un?"selected":""}>Solo un día (fecha puntual)</option></select>
+    <div class="clrow">
+    <div class="field" data-cdw style="${un?"display:none":""}"><label for="clD${i}">Día</label><select id="clD${i}" data-cd>${DIAS_L.map((n,k)=>`<option value="${k+1}" ${c.d===k+1?"selected":""}>${n}</option>`).join("")}</select></div>
+    <div class="field" data-cfw style="${un?"":"display:none"}"><label for="clE${i}">Fecha</label><input id="clE${i}" type="date" data-cfe value="${esc(fs)}"></div>
     <div class="field"><label for="clH${i}">Desde</label><select id="clH${i}" data-ch>${op(h)}</select></div>
     <div class="field"><label for="clF${i}">Hasta</label><select id="clF${i}" data-cf>${op(hf)}</select></div>
-    <button type="button" class="x" data-clx aria-label="Quitar este día">✕</button></div>`;
+    <button type="button" class="x" data-clx aria-label="Quitar este día">✕</button></div></div>`;
 }
-function leerClases(){return [...document.querySelectorAll("[data-clrow]")].map(r=>({id:r.dataset.clid||uid(),d:+r.querySelector("[data-cd]").value,h:r.querySelector("[data-ch]").value||"18:00",hf:r.querySelector("[data-cf]").value||"19:00"})).filter(c=>c.d>=1&&c.d<=7)}
-function clasesValidas(cl){const mal=cl.find(c=>aMin(c.hf)<=aMin(c.h));if(mal){toast(`La clase del ${DIAS_L[mal.d-1].toLowerCase()} tiene que terminar después de las ${mal.h}.`);return false}return true}
+function leerClases(){return [...document.querySelectorAll("[data-clrow]")].map(r=>{const un=r.querySelector("[data-cr]").value==="dia",f=un?r.querySelector("[data-cfe]").value:"";
+  return {id:r.dataset.clid||uid(),d:f?(parse(f).getDay()+6)%7+1:+r.querySelector("[data-cd]").value,h:r.querySelector("[data-ch]").value||"18:00",hf:r.querySelector("[data-cf]").value||"19:00",...(un?{f:f||"?"}:{})}}).filter(c=>c.d>=1&&c.d<=7)}
+function clasesValidas(cl){if(cl.some(c=>c.f==="?")){toast("Elegí la fecha de la clase de un solo día.");return false}const mal=cl.find(c=>aMin(c.hf)<=aMin(c.h));if(mal){toast(`La clase del ${mal.f?fechaCorta(mal.f):DIAS_L[mal.d-1].toLowerCase()} tiene que terminar después de las ${mal.h}.`);return false}return true}
 function alumnoPanel(a,pre){
   const nuevo=!a;a=a||{nombre:"",curso:"Canto",cuota:"",diaPago:10,telefono:"",clases:[{d:1,h:"18:00",hf:"19:00"}],...(pre||{})};
-  const cls=clasesDe(a);
+  const cls=clasesDe(a).map((c,i)=>({...c,fs:((a.clases||[])[i]||{}).fs||""}));
   const baja=a.activo===false;
   const dueno=esDueno(),edita=dueno||puede("editarAlumnos");
   if(nuevo&&!edita){toast("No tenés permiso para cargar alumnos.");return}
@@ -1021,11 +1028,14 @@ function alumnoPanel(a,pre){
   }
   $("#aC").addEventListener("change",()=>{$("#aGw").style.display=GRUPALES.includes($("#aC").value)?"":"none"});
   $("#aG").addEventListener("change",()=>{const g=$("#aG").value.trim(),m=alumnos.find(x=>x.id!==a.id&&GRUPALES.includes(x.curso)&&grupoDe(x)===g&&clasesDe(x).length);
-    if(m&&nuevo){const c=clasesDe(m)[0];const r=$("#clList").querySelector("[data-clrow]");if(r){r.querySelector("[data-cd]")&&(r.querySelector("[data-cd]").value=c.d);r.querySelector("[data-ch]")&&(r.querySelector("[data-ch]").value=c.h);const f=r.querySelector("[data-cf]");if(f){if(![...f.options].some(o=>o.value===c.hf))f.insertAdjacentHTML("beforeend",`<option>${c.hf}</option>`);f.value=c.hf}}}});
+    if(m&&nuevo){const c=clasesDe(m)[0];const r=$("#clList").querySelector("[data-clrow]");if(r){r.querySelector("[data-cd]")&&(r.querySelector("[data-cd]").value=c.d);r.querySelector("[data-ch]")&&(r.querySelector("[data-ch]").value=c.h);const f=r.querySelector("[data-cf]");if(f){if(![...f.options].some(o=>o.value===c.hf))f.insertAdjacentHTML("beforeend",`<option>${c.hf}</option>`);f.value=c.hf}const cr=r.querySelector("[data-cr]");cr.value=c.f?"dia":"sem";if(c.f)r.querySelector("[data-cfe]").value=c.f;cr.dispatchEvent(new Event("change",{bubbles:true}))}}});
   let n=cls.length;
   $("#clAdd").onclick=()=>{const prev=leerClases().slice(-1)[0];$("#clList").insertAdjacentHTML("beforeend",claseRowHTML({d:prev?Math.min(7,prev.d+1):1,h:prev?prev.h:"18:00",hf:prev?prev.hf:"19:00"},n++))};
   $("#clList").onchange=e=>{const s2=e.target.closest("[data-ch]");if(!s2)return;const r=s2.closest("[data-clrow]"),f=r.querySelector("[data-cf]");if(aMin(f.value)<=aMin(s2.value)){const nv=deMin(Math.min(23*60+45,aMin(s2.value)+60));if(![...f.options].some(o=>o.value===nv))f.insertAdjacentHTML("beforeend",`<option>${nv}</option>`);f.value=nv}};
   $("#clList").onclick=e=>{const x=e.target.closest("[data-clx]");if(x)x.closest("[data-clrow]").remove()};
+  $("#clList").addEventListener("change",e=>{const s3=e.target.closest("[data-cr]");if(!s3)return;const r=s3.closest("[data-clrow]"),un=s3.value==="dia";
+    r.querySelector("[data-cdw]").style.display=un?"none":"";r.querySelector("[data-cfw]").style.display=un?"":"none";
+    if(un&&!r.querySelector("[data-cfe]").value){const wd=+r.querySelector("[data-cd]").value,D=today();for(let i=0;i<7;i++){const X=new Date(D.getFullYear(),D.getMonth(),D.getDate()+i);if((X.getDay()+6)%7+1===wd){r.querySelector("[data-cfe]").value=iso(X);break}}}});
   if(nuevo&&!isPhone()&&!(pre&&pre.nombre))$("#aN").focus();
   $("#aX").onclick=closePanel;
   if($("#aOk"))$("#aOk").onclick=()=>{
@@ -1625,12 +1635,12 @@ document.addEventListener("click",ev=>{
   const tb=T.closest("nav.tabs [data-tab]");if(tb){tab=tb.dataset.tab;render();scrollTo(0,0);return}
   const go=T.closest("[data-go]");if(go){tab=go.dataset.go;render();return}
   const cu=T.closest("[data-cuota]");if(cu){ev.stopPropagation();abrirCuota(cu.dataset.cuota,cu.dataset.ym);return}
-  const gr=T.closest("[data-grupo]");if(gr){const [c,wd,h,hf,...gg]=gr.dataset.grupo.split("|");verGrupo(c,+wd,h,hf,gg.join("|"));return}
+  const gr=T.closest("[data-grupo]");if(gr){const [c,wd,h,hf,g,f]=gr.dataset.grupo.split("|");verGrupo(c,+wd,h,hf,g||"",f||"");return}
   const ge=T.closest("[data-gev]");if(ge){verEventoExterno(ge.dataset.gev);return}
   const lq=T.closest("[data-liq]");if(lq){const l=liquidaciones.find(x=>x.id===lq.dataset.liq);if(l&&esDueno())liquidacionPanel(l);return}
   if(T.id==="admPagar"){liquidacionPanel(null);return}
   if(T.id==="admPerm"){panelPermisos();return}
-  const sl=T.closest("[data-slot]");if(sl){if(!(esDueno()||puede("editarAlumnos")))return;const [f,h]=sl.dataset.slot.split("|"),D=parse(f);alumnoPanel(null,{clases:[{d:(D.getDay()+6)%7+1,h,hf:deMin(Math.min(23*60+45,aMin(h)+60))}]});return}
+  const sl=T.closest("[data-slot]");if(sl){if(!(esDueno()||puede("editarAlumnos")))return;const [f,h]=sl.dataset.slot.split("|"),D=parse(f);alumnoPanel(null,{clases:[{d:(D.getDay()+6)%7+1,h,hf:deMin(Math.min(23*60+45,aMin(h)+60)),fs:f}]});return}
   const dy=T.closest("[data-day]");if(dy){const d=+dy.dataset.day;selDay=selDay===d?null:d;render();return}
   const cvw=T.closest("[data-calview]");if(cvw){calView=cvw.dataset.calview;if(calView!=="mes"&&!calAnchor){const t=today();calAnchor=(t.getFullYear()===cur.y&&t.getMonth()===cur.m)?t:new Date(cur.y,cur.m,1)}render();return}
   const cn=T.closest("[data-calnav]");if(cn){moverCal(cn.dataset.calnav);return}

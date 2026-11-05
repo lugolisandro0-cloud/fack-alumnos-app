@@ -1,6 +1,6 @@
 {
- "version": "1.6.4",
- "sha256": "8009808cd1a41c301f75f53863fa1b8e398bfa94052d554e68fc651e27559509",
- "notas": "Se puede instalar en iPhone desde Safari",
+ "version": "1.6.5",
+ "sha256": "7de23eb54b06fc049efb5709a8fe0c02008246e895941bfe91fd5188fec19ef0",
+ "notas": "Clases y ensambles de una sola fecha",
  "base": "1.6.0"
 }
