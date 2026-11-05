@@ -16,7 +16,7 @@ const TZ = "America/Argentina/Buenos_Aires";
 const CURSOS_GRUPALES = ["Ensambles"];
 // Nombre del grupo de un alumno grupal (ej. "Ensamble 1"). Vacío = se agrupa solo por día y horario.
 function grupoDe(a) { return String((a && a.grupo) || "").replace(/\|/g, "/").trim(); }
-function claveGrupo(a, c) { const k = ["g", a.curso, c.d, c.h, c.hf]; const g = grupoDe(a); if (g) k.push(g); return k.join("|"); }
+function claveGrupo(a, c) { const k = ["g", a.curso, c.d, c.h, c.hf]; const g = grupoDe(a); if (g || c.f) k.push(g); if (c.f) k.push(c.f); return k.join("|"); }
 // Colores de Google Calendar (1 lavanda, 2 salvia, 3 uva, 4 flamenco, 5 banana, 6 mandarina, 7 pavo real, 8 grafito, 9 arándano, 10 albahaca, 11 tomate)
 const COLOR_CURSO = { "Canto": "4", "Guitarra": "7", "Piano": "3", "Batería": "6", "Bajo": "2", "Producción": "5", "Mezcla": "10", "Ensambles": "9", "Mentoría": "1", "Otro": "8" };
 const COLECCIONES = ["alumnos", "pagos", "gastos", "liquidaciones", "config"];
@@ -485,7 +485,8 @@ function clasesDe(a) {
   return (Array.isArray(a.clases) ? a.clases : []).filter(function (c) { return c && c.d >= 1 && c.d <= 7 && c.h; }).map(function (c) {
     let hf = c.hf;
     if (!hf) { const t = Math.min(23 * 60 + 59, aMin(c.h) + (c.dur || 60)); hf = deMin(t); }
-    return { id: c.id || "", d: Number(c.d), h: c.h, hf: hf };
+    const f = /^\d{4}-\d{2}-\d{2}$/.test(String(c.f || "")) ? String(c.f) : "";
+    return { id: c.id || "", d: Number(c.d), h: c.h, hf: hf, f: f };
   });
 }
 function aMin(h) { const p = String(h).split(":"); return Number(p[0]) * 60 + Number(p[1] || 0); }
@@ -515,12 +516,12 @@ function eventosDeseados(st) {
       if (aMin(c.hf) <= aMin(c.h)) return;
       if (CURSOS_GRUPALES.indexOf(a.curso) >= 0) {
         const k = claveGrupo(a, c);
-        const g = grupos[k] || (grupos[k] = { clave: k, curso: a.curso, nombre: grupoDe(a), d: c.d, h: c.h, hf: c.hf, miembros: [] });
+        const g = grupos[k] || (grupos[k] = { clave: k, curso: a.curso, nombre: grupoDe(a), d: c.d, h: c.h, hf: c.hf, f: c.f, miembros: [] });
         g.miembros.push({ a: a, id: f.id, inicio: inicio, fin: fin });
       } else {
         const k = ["a", f.id, c.id].join("|");
         out[k] = {
-          clave: k, d: c.d, h: c.h, hf: c.hf, inicio: inicio, fin: fin, colorId: COLOR_CURSO[a.curso] || COLOR_CURSO.Otro,
+          clave: k, d: c.d, h: c.h, hf: c.hf, f: c.f, inicio: inicio, fin: fin, colorId: COLOR_CURSO[a.curso] || COLOR_CURSO.Otro,
           titulo: a.nombre + (a.curso ? " · " + a.curso : ""),
           descripcion: "Alumno de FACK Music" + (a.telefono ? "\nTeléfono: " + a.telefono : "") + "\n\nEsta clase se sincroniza con la app Alumnos y Cuotas."
         };
@@ -534,14 +535,14 @@ function eventosDeseados(st) {
     const todosConFin = g.miembros.every(function (m) { return m.fin; });
     const fin = todosConFin ? g.miembros.map(function (m) { return m.fin; }).sort().slice(-1)[0] : "";
     out[k] = {
-      clave: k, d: g.d, h: g.h, hf: g.hf, inicio: inicio, fin: fin, colorId: COLOR_CURSO[g.curso] || COLOR_CURSO.Otro,
+      clave: k, d: g.d, h: g.h, hf: g.hf, f: g.f, inicio: inicio, fin: fin, colorId: COLOR_CURSO[g.curso] || COLOR_CURSO.Otro,
       titulo: (g.nombre ? g.nombre + " (" + g.curso + ")" : g.curso) + " · " + g.miembros.map(function (m) { return String(m.a.nombre); }).join(", "),
       descripcion: "Integrantes:\n" + g.miembros.map(function (m) { return "• " + m.a.nombre + (m.a.telefono ? " (" + m.a.telefono + ")" : ""); }).join("\n") + "\n\nEsta clase se sincroniza con la app Alumnos y Cuotas."
     };
   });
   Object.keys(out).forEach(function (k) {
     const e = out[k];
-    e.sig = JSON.stringify([e.d, e.h, e.hf, e.titulo, e.descripcion, e.colorId, e.inicio, e.fin]);
+    e.sig = JSON.stringify([e.d, e.h, e.hf, e.titulo, e.descripcion, e.colorId, e.inicio, e.fin, e.f || ""]);
   });
   return out;
 }
@@ -549,19 +550,21 @@ function eventosDeseados(st) {
 function cuerpoEvento(ev, desde) {
   let rrule = "RRULE:FREQ=WEEKLY";
   if (ev.fin) rrule += ";UNTIL=" + untilDeMes(ev.fin);
+  if (ev.f) desde = ev.f;
   return {
     summary: ev.titulo,
     description: ev.descripcion,
     colorId: ev.colorId,
     start: { dateTime: desde + "T" + ev.h + ":00", timeZone: TZ },
     end: { dateTime: desde + "T" + ev.hf + ":00", timeZone: TZ },
-    recurrence: [rrule],
+    recurrence: ev.f ? [] : [rrule],
     reminders: { useDefault: false, overrides: [] },
     extendedProperties: { private: { app: "fack", clave: ev.clave } }
   };
 }
 
 // Cierra una serie ayer (queda como historial) o la borra si todavía no empezó.
+function esUnica(m) { try { return !!(JSON.parse(m.sig || "[]")[8]); } catch (e) { return false; } }
 function cerrarSerie(calId, m) {
   const hoy = hoyTxt();
   try {
@@ -587,7 +590,7 @@ function moverClases(st, m, t) {
   if (p[0] === "a") {
     const f = st.idx["alumnos|" + p[1]];
     if (!f || f.deleted) return;
-    (f.data.clases || []).forEach(function (c) { if (c.id === p[2]) { c.d = t.d; c.h = t.h; c.hf = t.hf; delete c.dur; } });
+    (f.data.clases || []).forEach(function (c) { if (c.id === p[2]) { c.d = t.d; c.h = t.h; c.hf = t.hf; if (c.f) c.f = t.desde; delete c.dur; } });
     guardar(st, "alumnos", f.id, f.data, false);
   } else if (p[0] === "g") {
     alumnosVivos(st).forEach(function (f) {
@@ -595,11 +598,11 @@ function moverClases(st, m, t) {
       let cambio = false;
       (f.data.clases || []).forEach(function (c) {
         const n = clasesDe({ clases: [c] })[0];
-        if (n && String(n.d) === p[2] && n.h === p[3] && n.hf === p[4]) { c.d = t.d; c.h = t.h; c.hf = t.hf; delete c.dur; cambio = true; }
+        if (n && String(n.d) === p[2] && n.h === p[3] && n.hf === p[4] && n.f === (p[6] || "")) { c.d = t.d; c.h = t.h; c.hf = t.hf; if (c.f) c.f = t.desde; delete c.dur; cambio = true; }
       });
       if (cambio) guardar(st, "alumnos", f.id, f.data, false);
     });
-    m.clave = ["g", p[1], t.d, t.h, t.hf].concat(p[5] ? [p[5]] : []).join("|");
+    m.clave = ["g", p[1], t.d, t.h, t.hf].concat(p[6] ? [p[5] || "", t.desde] : p[5] ? [p[5]] : []).join("|");
   }
 }
 
@@ -613,7 +616,7 @@ function quitarClases(st, m) {
     f.data.clases = (f.data.clases || []).filter(function (c) {
       if (p[0] === "a") return c.id !== p[2];
       const n = clasesDe({ clases: [c] })[0];
-      return !(n && String(n.d) === p[2] && n.h === p[3] && n.hf === p[4]);
+      return !(n && String(n.d) === p[2] && n.h === p[3] && n.hf === p[4] && (p[0] !== "g" || n.f === (p[6] || "")));
     });
     if (f.data.clases.length !== antes) guardar(st, "alumnos", f.id, f.data, false);
   });
@@ -710,7 +713,7 @@ function sincronizarCalendario(st) {
   function llevarEvento(k) {
     const ev = deseados[k];
     const m = porClave(mapa, k);
-    const desdeInicio = primeraFecha(ev.inicio + "-01", ev.d);
+    const desdeInicio = ev.f || primeraFecha(ev.inicio + "-01", ev.d);
     if (!m) {
       const res = Calendar.Events.insert(cuerpoEvento(ev, desdeInicio), calId);
       mapa.lista.push({ clave: k, eventId: res.id, d: ev.d, h: ev.h, hf: ev.hf, desde: desdeInicio, sig: ev.sig });
@@ -719,7 +722,7 @@ function sincronizarCalendario(st) {
     }
     if (m.sig === ev.sig) return;
     const cambioHorario = m.d !== ev.d || m.h !== ev.h || m.hf !== ev.hf;
-    if (cambioHorario && m.desde && m.desde < hoy) {
+    if (!ev.f && !esUnica(m) && cambioHorario && m.desde && m.desde < hoy) {
       // Cambió el horario desde la app: la serie vieja queda como historial y arranca una nueva desde hoy.
       cerrarSerie(calId, m);
       let desde = primeraFecha(hoy, ev.d);
@@ -728,7 +731,7 @@ function sincronizarCalendario(st) {
       m.eventId = res.id; m.desde = desde;
     } else {
       const desde = cambioHorario ? desdeInicio : (m.desde || desdeInicio);
-      if (ev.fin && untilDeMes(ev.fin) < desde.replace(/-/g, "") + "T000000Z") {
+      if (!ev.f && ev.fin && untilDeMes(ev.fin) < desde.replace(/-/g, "") + "T000000Z") {
         try { Calendar.Events.remove(calId, m.eventId); } catch (err) { }
         quitarDelMapa(mapa, m); r.cerrados++; return;
       }
@@ -743,7 +746,8 @@ function sincronizarCalendario(st) {
     if (deseados[m.clave]) return;
     const p = m.clave.split("|");
     const existe = p[0] === "g" ? true : !!(st.idx["alumnos|" + p[1]] && !st.idx["alumnos|" + p[1]].deleted);
-    if (existe) cerrarSerie(calId, m);
+    if (esUnica(m)) { if (!(m.desde && m.desde < hoy)) { try { Calendar.Events.remove(calId, m.eventId); } catch (err) { } } }
+    else if (existe) cerrarSerie(calId, m);
     else { try { Calendar.Events.remove(calId, m.eventId); } catch (err) { } }
     quitarDelMapa(mapa, m);
     r.cerrados++;

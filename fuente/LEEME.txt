@@ -96,6 +96,9 @@ versión" > Implementar. La dirección (/exec) no cambia.
 - Desde el calendario: tocá el ensamble para cambiarle el nombre, sumar un
   alumno que ya está cargado ("Agregar"), crear uno nuevo o sacar a alguien.
 - Sin nombre, se agrupan como antes: por día y horario.
+- Clases o ensambles de una sola fecha: en la ficha, en "¿Cuándo tiene clase?",
+  cambiá "Todas las semanas" por "Solo un día (fecha puntual)" y elegí la fecha.
+  Aparece solo ese día en el calendario y en Google Calendar.
 
 =====================================================
 2d) ACTUALIZACIONES AUTOMÁTICAS
