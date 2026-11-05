@@ -505,15 +505,15 @@ function clasesFecha(D){
   const y=D.getFullYear(),m=D.getMonth(),wd=(D.getDay()+6)%7+1,out=[],grupos={};
   for(const a of alumnos){if(!activoEn(a,y,m))continue;for(const c of clasesDe(a))if(enDia(c,D,wd)){
     if(GRUPALES.includes(a.curso)){const g=grupoDe(a),k=`${a.curso}|${wd}|${c.h}|${c.hf}|${g}|${c.f}`;(grupos[k]=grupos[k]||{curso:a.curso,wd,h:c.h,hf:c.hf,g,f:c.f,miembros:[]}).miembros.push(a)}
-    else out.push({a,s:aMin(c.h),e:aMin(c.hf),t:a.nombre,sub:a.curso||"",color:colorCurso(a.curso)})}}
-  for(const g of Object.values(grupos)){g.miembros.sort((p,q)=>p.nombre.localeCompare(q.nombre));out.push({grupo:g,s:aMin(g.h),e:aMin(g.hf),t:tituloGrupo(g.curso,g.g,g.miembros.length),sub:g.miembros.map(x=>x.nombre).join(", "),color:colorCurso(g.curso)})}
+    else out.push({a,s:aMin(c.h),e:aMin(c.hf),t:a.nombre,sub:a.curso||"",color:colorCurso(a.curso),clave:["a",a.id,c.id].join("|")})}}
+  for(const g of Object.values(grupos)){g.miembros.sort((p,q)=>p.nombre.localeCompare(q.nombre));out.push({grupo:g,clave:["g",g.curso,g.wd,g.h,g.hf].concat(g.g||g.f?[g.g]:[]).concat(g.f?[g.f]:[]).join("|"),s:aMin(g.h),e:aMin(g.hf),t:tituloGrupo(g.curso,g.g,g.miembros.length),sub:g.miembros.map(x=>x.nombre).join(", "),color:colorCurso(g.curso)})}
   return out;
 }
 /* Eventos reales de Google Calendar para la agenda. La versión instalada la reemplaza. */
 function eventosAgenda(desde,hasta){return null}
 function verEventoExterno(id){}
 function eventosDesdeGoogle(lista,D){
-  const f=iso(D),out=[];
+  const f=iso(D),out=[],vistos=new Set(lista.map(ev=>ev.clave).filter(Boolean));
   for(const ev of lista){
     if(ev.todoDia||!ev.s||ev.s.slice(0,10)!==f)continue;
     const s=aMin(ev.s.slice(11,16)),e=ev.e&&ev.e.slice(0,10)===f?aMin(ev.e.slice(11,16)):24*60;
@@ -521,9 +521,13 @@ function eventosDesdeGoogle(lista,D){
     if(partes[0]==="a"){const a=alumnos.find(x=>x.id===partes[1]);if(a)o={...o,a,t:a.nombre,sub:a.curso||"",color:colorCurso(a.curso)}}
     else if(partes[0]==="g"){const [,curso,wd,h,hf]=partes,g=partes[5]||"",f=partes[6]||"",y=D.getFullYear(),m=D.getMonth();
       const miembros=alumnos.filter(a=>a.curso===curso&&grupoDe(a)===g&&activoEn(a,y,m)&&clasesDe(a).some(c=>String(c.d)===wd&&c.h===h&&c.hf===hf&&c.f===f)).sort((p,q)=>p.nombre.localeCompare(q.nombre));
+      // Un ensamble de Google sin integrantes en la app es una serie vieja (por ejemplo, pasó a ser de una sola fecha): no se muestra.
+      if(!miembros.length)continue;
       o={...o,grupo:{curso,wd:+wd,h,hf,g,f,miembros},t:tituloGrupo(curso,g,miembros.length),sub:miembros.map(x=>x.nombre).join(", "),color:colorCurso(curso)}}
     out.push(o);
   }
+  // Clases de la app que Google todavía no tiene (recién cargadas o de una sola fecha): se muestran igual.
+  for(const c of clasesFecha(D))if(c.clave&&!vistos.has(c.clave))out.push(c);
   return out;
 }
 function verGrupo(curso,wd,h,hf,g="",f=""){
