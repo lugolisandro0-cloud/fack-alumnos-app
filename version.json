@@ -1,6 +1,6 @@
 {
- "version": "1.6.6",
- "sha256": "f3e1d883dfcd897372b3462ac8354695b65ebfe41bb7fde05f76a85cab39295d",
- "notas": "Ensambles de una sola fecha: se ocultan las series viejas",
+ "version": "1.7.0",
+ "sha256": "acd0be18682285a53e0986e7c32996278a4b042111a77971d188cbeac3e75c11",
+ "notas": "Turnos y extras: clases extra, grabaciones, producción y sesiones de video en el calendario, con cobro aparte",
  "base": "1.6.0"
 }
