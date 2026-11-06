@@ -9,7 +9,7 @@
  */
 
 // ===== Ajustes =====
-const VERSION_SERVIDOR = "1.6.5";
+const VERSION_SERVIDOR = "1.7.0";
 const COMPARTIR_CON = (typeof AJUSTES !== "undefined" && AJUSTES && AJUSTES.COMPARTIR_CON) || ""; // mail del administrador para compartirle el calendario (opcional)
 const NOMBRE_CALENDARIO = "FACK Music · Clases";
 const TZ = "America/Argentina/Buenos_Aires";
@@ -19,7 +19,9 @@ function grupoDe(a) { return String((a && a.grupo) || "").replace(/\|/g, "/").tr
 function claveGrupo(a, c) { const k = ["g", a.curso, c.d, c.h, c.hf]; const g = grupoDe(a); if (g || c.f) k.push(g); if (c.f) k.push(c.f); return k.join("|"); }
 // Colores de Google Calendar (1 lavanda, 2 salvia, 3 uva, 4 flamenco, 5 banana, 6 mandarina, 7 pavo real, 8 grafito, 9 arándano, 10 albahaca, 11 tomate)
 const COLOR_CURSO = { "Canto": "4", "Guitarra": "7", "Piano": "3", "Batería": "6", "Bajo": "2", "Producción": "5", "Mezcla": "10", "Ensambles": "9", "Mentoría": "1", "Otro": "8" };
-const COLECCIONES = ["alumnos", "pagos", "gastos", "liquidaciones", "config"];
+const COLECCIONES = ["alumnos", "pagos", "gastos", "liquidaciones", "turnos", "config"];
+// Turnos sueltos (clase extra, grabación, producción, sesión de video...): color en Google Calendar según qué se hace.
+const COLOR_TIPO = { "Clase extra": "7", "Grabación": "4", "Producción": "5", "Mezcla": "10", "Sesión de video": "6", "Ensayo": "9", "Otro": "8" };
 const PERMISOS_BASE = { verCobros: false, verMontos: false, registrarCobros: false, editarAlumnos: true, bajasAlumnos: true, verGastos: "marcados", cargarGastos: true };
 const PARTE_BASE = { tipo: "pct", valor: 0 };
 
@@ -279,6 +281,7 @@ function permisosDe(st) {
 function parteGeneral(st) { return Object.assign({}, PARTE_BASE, configDe(st, "parte")); }
 // Lo que le corresponde al administrador por mes por un alumno.
 function parteDe(a, general) {
+  if (a.soloTurnos === true && !(Number(a.cuota) > 0)) return 0; // persona que solo viene por turnos sueltos: no genera parte mensual
   const p = a.parteAdmin && (a.parteAdmin.tipo === "pct" || a.parteAdmin.tipo === "monto") ? a.parteAdmin : general;
   const v = Number(p.valor) || 0;
   if (p.tipo === "monto") return Math.max(0, Math.round(v));
@@ -290,6 +293,16 @@ function parteMoneda(a, general) {
   if (!propia && general.tipo === "monto") return "ARS";
   return a.moneda || "ARS";
 }
+// Lo que le corresponde al administrador por un turno que se cobra aparte (lo elige el dueño en cada turno).
+function parteTurno(t) {
+  if (t.cobro !== "aparte") return 0;
+  const p = t.parteAdmin;
+  if (!p || (p.tipo !== "pct" && p.tipo !== "monto")) return 0;
+  const v = Number(p.valor) || 0;
+  if (p.tipo === "monto") return Math.max(0, Math.round(v));
+  return Math.max(0, Math.round((Number(t.monto) || 0) * v / 100));
+}
+const CAMPOS_TURNO = ["alumnoId", "fecha", "h", "hf", "tipo", "detalle", "cobro"];
 function esDelAdmin(d) { return d && (d.por === "admin" || d.por === "licha"); }
 
 // Qué ve el administrador de cada fila. null = no la ve.
@@ -317,6 +330,15 @@ function vistaAdmin(f, perm, general) {
     return null;
   }
   if (f.col === "liquidaciones") return d;
+  if (f.col === "turnos") {
+    const o = {};
+    CAMPOS_TURNO.concat(["moneda", "por"]).forEach(function (x) { if (x in d) o[x] = d[x]; });
+    if (perm.verMontos) o.monto = d.monto;
+    if (perm.verCobros && d.pago) { o.pago = Object.assign({}, d.pago); if (!perm.verMontos) delete o.pago.monto; }
+    o.aCobrar = parteTurno(d);
+    o.aCobrarMoneda = d.moneda || "ARS";
+    return o;
+  }
   if (f.col === "config") return f.id === "permisos" ? perm : f.id === "cambio" ? d : null;
   return null;
 }
@@ -325,7 +347,7 @@ function vistaAdmin(f, perm, general) {
 function cambioDelAdmin(st, c, perm, forzar) {
   const k = c.col + "|" + c.id, f = st.idx[k], prev = f && !f.deleted ? f.data : null;
   forzar[k] = true; // siempre se le devuelve la versión real
-  const d = Object.assign({}, c.data || {}); delete d.aCobrar; delete d.cobra;
+  const d = Object.assign({}, c.data || {}); delete d.aCobrar; delete d.cobra; delete d.aCobrarMoneda;
   if (c.col === "alumnos") {
     if (c.deleted) return; // eliminar: solo el dueño
     if (!prev) {
@@ -358,6 +380,27 @@ function cambioDelAdmin(st, c, perm, forzar) {
     guardar(st, "gastos", c.id, d, false);
     return;
   }
+  if (c.col === "turnos") {
+    if (c.deleted) { if (prev && perm.editarAlumnos) guardar(st, "turnos", c.id, {}, true); return; }
+    const al = st.idx["alumnos|" + d.alumnoId];
+    if (!al || al.deleted) return;
+    const nuevo = prev ? Object.assign({}, prev) : { por: "admin" };
+    if (perm.editarAlumnos) CAMPOS_TURNO.forEach(function (x) { if (x in d) nuevo[x] = d[x]; });
+    else if (!prev) return;
+    if (perm.verMontos && nuevo.cobro === "aparte") {
+      if ("monto" in d) nuevo.monto = Number(d.monto) || 0;
+      if ("moneda" in d) nuevo.moneda = d.moneda;
+    }
+    if (perm.registrarCobros && "pago" in d) {
+      if (d.pago && nuevo.cobro === "aparte") {
+        const monto = perm.verMontos && Number(d.pago.monto) > 0 ? Number(d.pago.monto) : (Number(nuevo.monto) || 0);
+        nuevo.pago = { fecha: d.pago.fecha, medio: d.pago.medio, monto: monto, moneda: nuevo.moneda || "ARS", por: "admin" };
+      } else nuevo.pago = null;
+    }
+    if (nuevo.cobro !== "aparte") nuevo.pago = null;
+    if (JSON.stringify(nuevo) !== JSON.stringify(prev)) guardar(st, "turnos", c.id, nuevo, false);
+    return;
+  }
   // liquidaciones y config: solo el dueño
 }
 
@@ -370,7 +413,7 @@ function sincronizar(req, ses) {
   (req.cambios || []).forEach(function (c) {
     if (COLECCIONES.indexOf(c.col) < 0 || !c.id) return;
     if (esDueno) {
-      const d = Object.assign({}, c.data || {}); delete d.aCobrar; delete d.cobra;
+      const d = Object.assign({}, c.data || {}); delete d.aCobrar; delete d.cobra; delete d.aCobrarMoneda;
       guardar(st, c.col, String(c.id), d, !!c.deleted);
     } else cambioDelAdmin(st, { col: c.col, id: String(c.id), data: c.data, deleted: c.deleted }, permAntes, forzar);
   });
@@ -540,6 +583,21 @@ function eventosDeseados(st) {
       descripcion: "Integrantes:\n" + g.miembros.map(function (m) { return "• " + m.a.nombre + (m.a.telefono ? " (" + m.a.telefono + ")" : ""); }).join("\n") + "\n\nEsta clase se sincroniza con la app Alumnos y Cuotas."
     };
   });
+  st.filas.forEach(function (f) {
+    if (f.col !== "turnos" || f.deleted) return;
+    const t = f.data || {};
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(t.fecha || "")) || !t.h) return;
+    const al = st.idx["alumnos|" + t.alumnoId];
+    if (!al || al.deleted) return;
+    const a = al.data, hf = t.hf || deMin(Math.min(23 * 60 + 59, aMin(t.h) + 60));
+    if (aMin(hf) <= aMin(t.h)) return;
+    const k = ["t", f.id].join("|"), tipo = t.tipo || "Otro";
+    out[k] = {
+      clave: k, d: Number(fmt(fechaLocal(t.fecha + " 12:00"), "u")), h: t.h, hf: hf, f: t.fecha, inicio: t.fecha.slice(0, 7), fin: "", colorId: COLOR_TIPO[tipo] || COLOR_TIPO.Otro,
+      titulo: a.nombre + " · " + tipo,
+      descripcion: (t.detalle ? t.detalle + "\n" : "") + (t.cobro === "aparte" ? "Se cobra aparte de la cuota" : "Incluido en la cuota") + (a.telefono ? "\nTeléfono: " + a.telefono : "") + "\n\nEste turno se sincroniza con la app Alumnos y Cuotas."
+    };
+  });
   Object.keys(out).forEach(function (k) {
     const e = out[k];
     e.sig = JSON.stringify([e.d, e.h, e.hf, e.titulo, e.descripcion, e.colorId, e.inicio, e.fin, e.f || ""]);
@@ -587,6 +645,13 @@ function horarioDe(it) {
 // Aplica en la planilla un cambio de horario hecho en Google Calendar.
 function moverClases(st, m, t) {
   const p = m.clave.split("|");
+  if (p[0] === "t") {
+    const f = st.idx["turnos|" + p[1]];
+    if (!f || f.deleted) return;
+    f.data.fecha = t.desde; f.data.h = t.h; f.data.hf = t.hf;
+    guardar(st, "turnos", f.id, f.data, false);
+    return;
+  }
   if (p[0] === "a") {
     const f = st.idx["alumnos|" + p[1]];
     if (!f || f.deleted) return;
@@ -609,6 +674,12 @@ function moverClases(st, m, t) {
 // Quita de la planilla las clases de un evento borrado en Google Calendar.
 function quitarClases(st, m) {
   const p = m.clave.split("|");
+  if (p[0] === "t") {
+    // Turno borrado en Google Calendar: se borra en la app, salvo que ya tenga un pago registrado (se vuelve a crear el evento).
+    const f = st.idx["turnos|" + p[1]];
+    if (f && !f.deleted && !(f.data && f.data.pago)) guardar(st, "turnos", f.id, {}, true);
+    return;
+  }
   alumnosVivos(st).forEach(function (f) {
     if (p[0] === "a" && f.id !== p[1]) return;
     if (p[0] === "g" && (f.data.curso !== p[1] || grupoDe(f.data) !== (p[5] || ""))) return;
@@ -664,7 +735,7 @@ function sincronizarCalendario(st) {
     const t = horarioDe(it);
     if (!t) return;
     if (m) {
-      if (t.d !== m.d || t.h !== m.h || t.hf !== m.hf) {
+      if (t.d !== m.d || t.h !== m.h || t.hf !== m.hf || (esUnica(m) && t.desde !== m.desde)) {
         moverClases(st, m, t);
         m.d = t.d; m.h = t.h; m.hf = t.hf; m.desde = t.desde;
         const otro = mapa.lista.filter(function (x) { return x !== m && x.clave === m.clave; })[0];
@@ -745,7 +816,7 @@ function sincronizarCalendario(st) {
   mapa.lista.slice().forEach(function (m) {
     if (deseados[m.clave]) return;
     const p = m.clave.split("|");
-    const existe = p[0] === "g" ? true : !!(st.idx["alumnos|" + p[1]] && !st.idx["alumnos|" + p[1]].deleted);
+    const existe = p[0] === "g" || p[0] === "t" ? true : !!(st.idx["alumnos|" + p[1]] && !st.idx["alumnos|" + p[1]].deleted);
     if (esUnica(m)) { if (!(m.desde && m.desde < hoy)) { try { Calendar.Events.remove(calId, m.eventId); } catch (err) { } } }
     else if (existe) cerrarSerie(calId, m);
     else { try { Calendar.Events.remove(calId, m.eventId); } catch (err) { } }
@@ -810,6 +881,11 @@ function actualizarHojasLegibles(st) {
   escribirHoja("Gastos", ["Fecha", "Concepto", "Categoría", "Monto", "Registró"],
     vivos("gastos").sort(function (x, y) { return String(y.fecha).localeCompare(String(x.fecha)); }).map(function (g) {
       return [g.fecha || "", g.concepto || "", g.categoria || "", g.monto || 0, nombresUsuarios[g.por] || ""];
+    }));
+  escribirHoja("Turnos y extras", ["Fecha", "Desde", "Hasta", "Quién", "Qué hace", "Detalle", "Cobro", "Precio", "Moneda", "Pagó", "Fecha de pago", "Medio", "Parte del administrador"],
+    vivos("turnos").sort(function (x, y) { return String(y.fecha).localeCompare(String(x.fecha)); }).map(function (t) {
+      const ap = t.cobro === "aparte", p = t.pago || null;
+      return [t.fecha || "", t.h || "", t.hf || "", nombres[t.alumnoId] || "(alumno borrado)", t.tipo || "", t.detalle || "", ap ? "Aparte" : "Incluido en la cuota", ap ? (t.monto || 0) : "", ap ? (t.moneda || "ARS") : "", ap ? (p ? "Sí" : "No") : "", p ? p.fecha || "" : "", p ? p.medio || "" : "", ap ? parteTurno(t) : ""];
     }));
   escribirHoja("Pagos al administrador", ["Mes", "Fecha", "Monto", "Nota"],
     vivos("liquidaciones").sort(function (x, y) { return String(y.fecha).localeCompare(String(x.fecha)); }).map(function (l) {

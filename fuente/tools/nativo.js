@@ -28,7 +28,7 @@ function pintarUsuario(){
   b.innerHTML=`<span class="av" style="background:${col}">${esc(inicial(yo.name))}</span><span class="who"><b>${esc(yo.name)}</b><small>${esc(yo.rol)}</small></span>`;
   b.setAttribute("aria-label",`Ajustes. ${yo.name}, ${yo.rol}`);
 }
-function vaciarDatos(){alumnos=[];pagos={};gastos=[];liquidaciones=[];config={};lsSave()}
+function vaciarDatos(){alumnos=[];pagos={};gastos=[];liquidaciones=[];turnos=[];config={};lsSave()}
 
 /* ---------- conexión con Google ---------- */
 const sync=(()=>{
@@ -68,6 +68,7 @@ const sync=(()=>{
       else if(x.col==="pagos"){delete pagos[x.id];if(!x.deleted)pagos[x.id]=v}
       else if(x.col==="gastos"){gastos=gastos.filter(g=>g.id!==x.id);if(!x.deleted)gastos.push(v)}
       else if(x.col==="liquidaciones"){liquidaciones=liquidaciones.filter(g=>g.id!==x.id);if(!x.deleted)liquidaciones.push(v)}
+      else if(x.col==="turnos"){turnos=turnos.filter(g=>g.id!==x.id);if(!x.deleted)turnos.push(v)}
       else if(x.col==="config"){delete config[x.id];if(!x.deleted)config[x.id]={...(x.data||{})}}
       cambio=true;
     }
@@ -110,6 +111,7 @@ const sync=(()=>{
       alumnos.forEach(a=>{const {id,aCobrar,cobra,...r}=a;cfg.cola.push({col:"alumnos",id,data:r,deleted:false})});
       Object.values(pagos).forEach(p=>{const {id,...r}=p;cfg.cola.push({col:"pagos",id,data:r,deleted:false})});
       gastos.forEach(g=>{const {id,...r}=g;cfg.cola.push({col:"gastos",id,data:r,deleted:false})});
+      turnos.forEach(t=>{const {id,aCobrar,aCobrarMoneda,...r}=t;cfg.cola.push({col:"turnos",id,data:r,deleted:false})});
     }else vaciarDatos();
     save();guardarPerfil();
     while(cfg.cola.length&&!error){await ciclo()}

@@ -11,4 +11,4 @@ import hashlib,json,sys
 h=open("/home/claude/fack-alumnos-app/servidor/Codigo.gs","rb").read()
 json.dump({"version":sys.argv[1],"sha256":hashlib.sha256(h).hexdigest()},open("/home/claude/fack-alumnos-app/servidor/version.json","w"),indent=1)
 P
-cd "$R" && git add -A && git -c user.name="Claude" -c user.email="noreply@anthropic.com" commit -qm "Servidor $V" && git pull -q --rebase origin main && git push -q origin HEAD:main && echo "Servidor $V publicado"
+cd "$R" && git add -A && git -c user.name="Claude" -c user.email="noreply@anthropic.com" commit -qm "Servidor $V" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>" -m "Claude-Session: https://claude.ai/code/session_016e9Hdyv7n9j2EbEqzYoLk2" && git pull -q --rebase origin main && git push -q origin HEAD:main && echo "Servidor $V publicado"

@@ -89,6 +89,10 @@ button{font:inherit;color:inherit;cursor:pointer}
 .seg{display:inline-flex;border:2px solid var(--line2);border-radius:999px;padding:2px;gap:2px}
 .seg button{border:0;background:none;color:var(--muted);border-radius:999px;padding:6px 14px;font-family:var(--f-cond);font-weight:700;font-size:13px;letter-spacing:.12em;text-transform:uppercase}
 .seg button[aria-pressed="true"]{background:var(--accent);color:#fff}
+.cl.tu{border-left:3px solid var(--c);padding-left:4px}
+.dots i.c.tu{border-radius:2px;border-color:var(--accent)}
+.wk-ev.tu{border-style:dashed}
+.ftabs{display:flex;gap:6px;flex-wrap:wrap}
 .clw{display:flex;flex-direction:column;gap:6px;padding:8px 0;border-bottom:1px dashed var(--line2)}.clw .clrep{width:auto;align-self:flex-start;font-size:14px;padding:6px 10px}
 .clrow{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr) 40px;gap:8px;align-items:end}
 .clrow .x{height:42px;border:2px solid var(--line2);border-radius:8px;background:none;color:var(--muted);font-size:16px}
@@ -315,18 +319,19 @@ const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&g
 const uid=()=>Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-4);
 const toNum=v=>{const n=parseFloat(String(v).replace(/\./g,"").replace(",","."));return isFinite(n)?n:0};
 
-let alumnos=[],pagos={},gastos=[],liquidaciones=[],config={};
+let alumnos=[],pagos={},gastos=[],liquidaciones=[],turnos=[],config={};
 let cols=null,loaded=false;
 let tab="cal",selDay=null,buscar="",verInactivos=false,pendingRender=false;
 let cur=(()=>{const t=today();return {y:t.getFullYear(),m:t.getMonth()}})();
 
 /* ---------- guardar ---------- */
-function lsSave(){if(cols)return;try{localStorage.setItem(LS,JSON.stringify({alumnos,pagos,gastos,liquidaciones,config}))}catch(e){}}
+function lsSave(){if(cols)return;try{localStorage.setItem(LS,JSON.stringify({alumnos,pagos,gastos,liquidaciones,turnos,config}))}catch(e){}}
 async function put(col,id,data){
   if(col==="alumnos"){const i=alumnos.findIndex(x=>x.id===id);const v={id,...data};i>=0?alumnos[i]=v:alumnos.push(v)}
   if(col==="pagos")pagos[id]={id,...data};
   if(col==="gastos"){const i=gastos.findIndex(x=>x.id===id);const v={id,...data};i>=0?gastos[i]=v:gastos.push(v)}
   if(col==="liquidaciones"){const i=liquidaciones.findIndex(x=>x.id===id);const v={id,...data};i>=0?liquidaciones[i]=v:liquidaciones.push(v)}
+  if(col==="turnos"){const i=turnos.findIndex(x=>x.id===id);const v={id,...data};i>=0?turnos[i]=v:turnos.push(v)}
   if(col==="config")config[id]={...data};
   safeRender();
   if(cols){try{const {id:_,...rest}=data;await cols[col].doc(id).set(rest)}catch(e){toast("No se pudo guardar. Revisá la conexión.")}}else lsSave();
@@ -336,6 +341,7 @@ async function del(col,id){
   if(col==="pagos")delete pagos[id];
   if(col==="gastos")gastos=gastos.filter(x=>x.id!==id);
   if(col==="liquidaciones")liquidaciones=liquidaciones.filter(x=>x.id!==id);
+  if(col==="turnos")turnos=turnos.filter(x=>x.id!==id);
   if(col==="config")delete config[id];
   safeRender();
   if(cols){try{await cols[col].doc(id).delete()}catch(e){toast("No se pudo borrar.")}}else lsSave();
@@ -356,6 +362,7 @@ function parteMon(a){
 function parteDe(a){return enPesos(parteOrig(a),parteMon(a))}
 function parteOrig(a){
   if(!esDueno())return Number(a.aCobrar)||0;
+  if(esSoloTurnos(a))return 0;
   const p=a.parteAdmin&&(a.parteAdmin.tipo==="pct"||a.parteAdmin.tipo==="monto")?a.parteAdmin:parteGeneral(),v=Number(p.valor)||0;
   return p.tipo==="monto"?Math.max(0,Math.round(v)):Math.max(0,Math.round((Number(a.cuota)||0)*v/100));
 }
@@ -371,7 +378,7 @@ const parteTxt=p=>p&&p.tipo==="monto"?fmt(p.valor):`${Number(p&&p.valor)||0}%`;
 const tieneCuota=a=>Number(a.cuota)>0||a.cobra===true;
 const esDelAdmin=g=>g&&(g.por==="admin"||g.por==="licha");
 function liqMes(y,m){const k=mk(y,m);return liquidaciones.filter(l=>l.mes===k)}
-function correspondeAdmin(y,m){return alumnos.filter(a=>activoEn(a,y,m)).reduce((s,a)=>s+parteDe(a),0)}
+function correspondeAdmin(y,m){return alumnos.filter(a=>activoEn(a,y,m)).reduce((s,a)=>s+parteDe(a),0)+turnosMes(y,m).reduce((s,t)=>s+parteT(t),0)}
 
 /* ---------- lógica de cuotas ---------- */
 const activoEn=(a,y,m)=>{const k=mk(y,m);if(a.inicio&&a.inicio>k)return false;if(a.fin)return k<a.fin;return a.activo!==false};
@@ -397,7 +404,159 @@ function resumenMes(y,m){
   let esperado=0,cobrado=0,late=0,pend=0;
   for(const a of act){esperado+=enPesos(a.cuota,monDe(a));const p=pagoDe(a,y,m);if(p)cobrado+=enPesos(p.monto,p.moneda||monDe(a));else{const e=estado(a,y,m);e==="late"?late++:pend++}}
   const gas=gastos.filter(g=>g.fecha&&g.fecha.startsWith(mk(y,m))).reduce((s,g)=>s+(g.monto||0),0)+(esDueno()?liqMes(y,m).reduce((s,l)=>s+(Number(l.monto)||0),0):0);
-  return {act:act.length,esperado,cobrado,late,pend,gas,porCobrar:Math.max(0,esperado-act.filter(a=>pagoDe(a,y,m)).reduce((s,a)=>s+enPesos(a.cuota,monDe(a)),0))};
+  let porCobrar=Math.max(0,esperado-act.filter(a=>pagoDe(a,y,m)).reduce((s,a)=>s+enPesos(a.cuota,monDe(a)),0));
+  for(const t of turnosMes(y,m)){if(!tAparte(t))continue;const v=enPesos(t.monto,monT(t));esperado+=v;if(t.pago)cobrado+=enPesos(t.pago.monto,t.pago.moneda||monT(t));else{porCobrar+=v;estadoT(t)==="late"?late++:pend++}}
+  return {act:act.length-act.filter(esSoloTurnos).length,esperado,cobrado,late,pend,gas,porCobrar};
+}
+
+/* ---------- turnos y extras ---------- */
+const TIPOS_TURNO=["Clase extra","Grabación","Producción","Mezcla","Sesión de video","Ensayo","Otro"];
+const COLOR_TIPO={"Clase extra":"#4CA4D7","Grabación":"#D61E8D","Producción":"#E0A030","Mezcla":"#5FC46E","Sesión de video":"#F06A3C","Ensayo":"#4F7BFF","Otro":"#8E8EA0"};
+const tAparte=t=>t&&t.cobro==="aparte";
+const monT=t=>MONEDAS[t&&t.moneda]?t.moneda:"ARS";
+const alDeT=t=>alumnos.find(a=>a.id===t.alumnoId);
+const turnosVivos=()=>turnos.filter(t=>/^\d{4}-\d{2}-\d{2}$/.test(String(t.fecha||""))&&alDeT(t));
+const turnosFecha=D=>{const f=iso(D);return turnosVivos().filter(t=>t.fecha===f).sort((p,q)=>String(p.h).localeCompare(String(q.h)))};
+const turnosMes=(y,m)=>{const k=mk(y,m);return turnosVivos().filter(t=>t.fecha.startsWith(k))};
+const turnosDe=a=>turnos.filter(t=>t.alumnoId===a.id).sort((p,q)=>(String(q.fecha)+q.h).localeCompare(String(p.fecha)+p.h));
+const tipoT=t=>t.tipo||"Otro";
+const tituloT=t=>{const a=alDeT(t);return (a?a.nombre:"(sin alumno)")+" · "+tipoT(t)};
+const fechaLargaT=t=>parse(t.fecha).toLocaleDateString("es-AR",{weekday:"long",day:"numeric",month:"long"});
+const hfT=t=>t.hf||deMin(Math.min(23*60+59,aMin(t.h||"18:00")+60));
+const esSoloTurnos=a=>a&&a.soloTurnos===true&&!(Number(a.cuota)>0)&&!a.cobra;
+function estadoT(t){
+  if(!tAparte(t))return "na";
+  if(t.pago)return "paid";
+  const diff=Math.round((parse(t.fecha)-today())/864e5);
+  return diff<0?"late":diff===0?"today":diff===1?"tomorrow":"pend";
+}
+const estTxtT={paid:"Pagó",late:"Debe",today:"A cobrar",tomorrow:"A cobrar",pend:"A cobrar",na:"Incluido"};
+// Lo que le corresponde al administrador por un turno que se cobra aparte (lo elige el dueño en cada turno).
+function parteTOrig(t){
+  if(!tAparte(t))return 0;
+  if(!esDueno())return Number(t.aCobrar)||0;
+  const p=t.parteAdmin;if(!p||!(p.tipo==="pct"||p.tipo==="monto"))return 0;
+  const v=Number(p.valor)||0;
+  return p.tipo==="monto"?Math.max(0,Math.round(v)):Math.max(0,Math.round((Number(t.monto)||0)*v/100));
+}
+const parteTMon=t=>esDueno()?monT(t):(t.aCobrarMoneda||monT(t));
+const parteT=t=>enPesos(parteTOrig(t),parteTMon(t));
+const precioTxt=t=>tAparte(t)?(puede("verMontos")&&Number(t.monto)>0?fmtM(t.monto,monT(t)):"Se cobra aparte"):"Incluido en la cuota";
+function turnoPill(t){
+  const e=estadoT(t);
+  if(e==="na")return `<span class="pill na">Incluido</span>`;
+  if(!puede("verCobros"))return `<span class="pill na">Aparte</span>`;
+  return `<button class="pill ${e}" data-cobrot="${t.id}">${estTxtT[e]}</button>`;
+}
+function turnoRowHTML(t,conNombre){
+  const a=alDeT(t),D=parse(t.fecha);
+  return `<div class="mrow"><button class="av" data-turno="${t.id}" style="font-family:var(--f-cond);font-size:14px;line-height:1;border-color:${COLOR_TIPO[tipoT(t)]||COLOR_TIPO.Otro}" aria-label="Turno del ${D.getDate()}/${D.getMonth()+1}">${D.getDate()}/${D.getMonth()+1}</button>
+    <button data-turno="${t.id}" style="border:0;background:none;text-align:left;padding:0;min-width:0;color:inherit"><div class="t">${conNombre?esc(a?a.nombre:"")+" · ":""}${esc(tipoT(t))}</div><div class="s">${esc(DIAS[(D.getDay()+6)%7])} ${esc(t.h||"")}–${esc(hfT(t))} · ${esc(precioTxt(t))}</div>${t.detalle?`<div class="sched">${esc(t.detalle)}</div>`:""}</button>
+    <div class="r">${turnoPill(t)}</div></div>`;
+}
+// Cobro de un turno que se paga aparte de la cuota.
+function cobroTurnoPanel(id){
+  const t=turnos.find(x=>x.id===id);if(!t)return;
+  if(!puede("verCobros")){turnoPanel(t);return}
+  const a=alDeT(t),vm=puede("verMontos"),rc=puede("registrarCobros"),p=t.pago,e=estadoT(t);
+  panel(`<div class="toolbar"><div><div class="lbl">${esc(tipoT(t))} · ${esc(fechaLargaT(t))}</div><h2 style="font-size:19px">${esc(a?a.nombre:"")}</h2><div class="muted">${esc(t.h||"")}–${esc(hfT(t))}${t.detalle?" · "+esc(t.detalle):""}</div></div><span class="pill ${e}" style="margin:0">${estTxtT[e]}</span></div>
+    <button class="btn sm ghost" data-turno="${t.id}" style="align-self:flex-start">Ver o cambiar el turno</button>
+    ${p?`<div class="card" style="background:var(--paid-soft);border:0"><div class="kv"><span>Pagó</span><span class="num">${vm?fmtM(p.monto,p.moneda||monT(t)):"Sí"}</span></div><div class="kv"><span>Fecha</span><span>${p.fecha?parse(p.fecha).toLocaleDateString("es-AR"):"—"}</span></div><div class="kv"><span>Medio</span><span>${esc(p.medio||"—")}</span></div><div class="kv"><span>Registró</span><span>${esc(quien(p.por))}</span></div></div>
+      <div class="actions">${rc?`<button class="btn ghost" id="ctUndo">Deshacer pago</button>`:""}<button class="btn" id="ctX">Listo</button></div>`
+    :!rc?`<p class="muted" style="margin:0">Todavía no figura el pago de este turno.</p><div class="actions"><button class="btn" id="ctX">Listo</button></div>`
+    :`<div class="two">${vm?`<div class="field"><label for="ctM">Monto${monT(t)!=="ARS"?" ("+MONEDAS[monT(t)].n.toLowerCase()+")":""}</label><input id="ctM" inputmode="numeric" value="${t.monto||""}"></div>`:""}
+      <div class="field"><label for="ctF">Fecha de pago</label><input id="ctF" type="date" value="${iso(today())}"></div></div>
+      <div class="field"><label for="ctMe">Medio</label><select id="ctMe">${MEDIOS.map(x=>`<option>${x}</option>`).join("")}</select></div>
+      <div class="actions"><button class="btn ghost" id="ctX">Cancelar</button><button class="btn paid" id="ctOk">Registrar pago</button></div>`}`);
+  $("#ctX").onclick=closePanel;
+  const base=()=>{const {aCobrar,aCobrarMoneda,...r}=strip(t);return r};
+  if(p){if($("#ctUndo"))$("#ctUndo").onclick=()=>{put("turnos",t.id,{...base(),pago:null});closePanel();toast("Pago deshecho")}}
+  else if($("#ctOk"))$("#ctOk").onclick=()=>{const monto=vm?toNum($("#ctM").value):0;if(vm&&!monto){toast("Poné el monto que pagó.");return}
+    put("turnos",t.id,{...base(),pago:{monto,moneda:monT(t),fecha:$("#ctF").value||iso(today()),medio:$("#ctMe").value,por:yo.id}});closePanel();toast("Pago registrado")};
+}
+// Agendar o editar un turno: quién viene, a qué hora y qué hace.
+function turnoPanel(t,pre){
+  const nuevo=!t,dueno=esDueno(),edita=dueno||puede("editarAlumnos"),vm=puede("verMontos");
+  if(nuevo&&!edita){toast("No tenés permiso para agendar turnos.");return}
+  const g=parteGeneral();
+  t=t||{alumnoId:"",fecha:iso(today()),h:"18:00",hf:"",tipo:"Clase extra",detalle:"",cobro:"",monto:"",moneda:"ARS",parteAdmin:g.tipo==="pct"&&Number(g.valor)>0?{tipo:"pct",valor:g.valor}:null,...(pre||{})};
+  const h=t.h||"18:00",hf=t.hf||deMin(Math.min(23*60+45,aMin(h)+60));
+  const op=v=>HORAS.concat(HORAS.includes(v)?[]:[v]).sort().map(x=>`<option ${x===v?"selected":""}>${esc(x)}</option>`).join("");
+  const lista=alumnos.filter(a=>a.activo!==false||a.id===t.alumnoId).sort((p,q)=>p.nombre.localeCompare(q.nombre));
+  const pa=t.parteAdmin&&(t.parteAdmin.tipo==="pct"||t.parteAdmin.tipo==="monto")?t.parteAdmin:{tipo:"nada",valor:""};
+  const a0=alDeT(t);
+  panel(`<div class="lbl">${nuevo?"Agendar turno":"Turno"}${!nuevo&&a0?" · "+esc(tipoT(t)):""}</div><h2 style="font-size:24px">${nuevo?"¿Quién viene y qué hace?":esc(a0?a0.nombre:"Turno")}</h2>
+    <div class="field"><label for="tA">Quién viene</label><select id="tA"><option value="">Elegí un alumno o cliente…</option>${lista.map(a=>`<option value="${a.id}" ${a.id===t.alumnoId?"selected":""}>${esc(a.nombre)}${a.curso&&!esSoloTurnos(a)?" · "+esc(a.curso):""}</option>`).join("")}<option value="__nuevo">+ Persona nueva (sin cuota mensual)</option></select></div>
+    <div id="tNw" class="two" style="display:none"><div class="field"><label for="tNn">Nombre y apellido</label><input id="tNn" autocomplete="off"></div><div class="field"><label for="tNt">Teléfono</label><input id="tNt" inputmode="tel"></div></div>
+    <div class="field"><label for="tTi">Qué hace</label><select id="tTi">${TIPOS_TURNO.concat(TIPOS_TURNO.includes(tipoT(t))?[]:[tipoT(t)]).map(x=>`<option ${x===tipoT(t)?"selected":""}>${esc(x)}</option>`).join("")}</select></div>
+    <div class="field"><label for="tD">Detalle (opcional)</label><input id="tD" value="${esc(t.detalle||"")}" placeholder="Ej.: voces de 2 temas, video para redes"></div>
+    <div class="field"><label for="tF">Día</label><input id="tF" type="date" value="${esc(t.fecha)}"></div>
+    <div class="two"><div class="field"><label for="tH">Desde</label><select id="tH">${op(h)}</select></div><div class="field"><label for="tHf">Hasta</label><select id="tHf">${op(hf)}</select></div></div>
+    <div class="lbl" style="margin-top:4px">Cobro</div>
+    <div class="seg" role="group" aria-label="Cobro" id="tCo" style="align-self:flex-start"><button type="button" data-co="incluido">Incluido en la cuota</button><button type="button" data-co="aparte">Se cobra aparte</button></div>
+    <div id="tApw" style="display:flex;flex-direction:column;gap:12px">
+      ${dueno||vm?`<div class="field"><label for="tM">Precio</label><div style="display:flex;gap:6px"><select id="tMon" style="width:auto;flex:none">${Object.entries(MONEDAS).map(([k,v])=>`<option value="${k}" ${monT(t)===k?"selected":""}>${v.s}</option>`).join("")}</select><input id="tM" inputmode="numeric" placeholder="Ej.: 60000" value="${t.monto||""}" style="flex:1;min-width:0"></div></div>`:""}
+      ${dueno?`<div class="two"><div class="field"><label for="tPT">Pago ${esc(aAdmin())}</label><select id="tPT"><option value="nada" ${pa.tipo==="nada"?"selected":""}>No le toca nada</option><option value="pct" ${pa.tipo==="pct"?"selected":""}>Porcentaje</option><option value="monto" ${pa.tipo==="monto"?"selected":""}>Monto fijo</option></select></div>
+        <div class="field"><label for="tPV" id="tPVl">Porcentaje</label><input id="tPV" inputmode="decimal" value="${pa.tipo==="nada"?"":esc(pa.valor)}"></div></div><p class="by" id="tPR" style="margin:0"></p>`
+      :!nuevo&&tAparte(t)?`<div class="kv"><span>Tu parte</span><span class="num" style="color:var(--paid)">${fmtM(parteTOrig(t),parteTMon(t))}</span></div>`:""}
+      ${!nuevo&&puede("verCobros")?`<div class="kv"><span>Pago</span><span>${turnoPill(t)}</span></div>`:""}
+    </div>
+    <p class="by" id="tAv" style="margin:0"></p>
+    <div class="actions"><button class="btn ghost" id="tX">${edita?"Cancelar":"Cerrar"}</button>${edita?`<button class="btn" id="tOk">${nuevo?"Agendar":"Guardar cambios"}</button>`:""}</div>
+    <div class="actions">${a0?`<button class="btn ghost" data-edit-al="${a0.id}">Ver ficha de ${esc(a0.nombre.split(" ")[0])}</button>`:""}${!nuevo&&edita?`<button class="btn ghost" id="tDel" style="color:var(--late);border-color:var(--late)">Borrar turno</button>`:""}</div>
+    ${nuevo?`<p class="foot" style="margin:0">¿Es un alumno nuevo que viene todas las semanas? <button class="btn sm ghost" id="tAlNuevo" style="margin-top:6px">Cargar alumno con horario fijo</button></p>`:""}`);
+  let co=t.cobro==="aparte"||t.cobro==="incluido"?t.cobro:"",tocado=!!co;
+  const elegido=()=>{const v=$("#tA").value;return v&&v!=="__nuevo"?alumnos.find(a=>a.id===v):null};
+  const sugerido=()=>{const a=elegido(),tieneQ=a&&(tieneCuota(a)&&!esSoloTurnos(a));return $("#tTi").value==="Clase extra"&&tieneQ?"incluido":"aparte"};
+  const pintar=()=>{
+    if(!tocado)co=sugerido();
+    document.querySelectorAll("#tCo [data-co]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.co===co)));
+    $("#tApw").style.display=co==="aparte"?"flex":"none";
+    $("#tNw").style.display=$("#tA").value==="__nuevo"?"":"none";
+    const a=elegido();$("#tAv").textContent=co==="incluido"?(a&&!tieneCuota(a)?`${a.nombre} no tiene cuota mensual: si se cobra, elegí "Se cobra aparte".`:"No suma nada a cobrar: va con la cuota del mes."):"";
+    if(dueno&&$("#tPT")){const tp=$("#tPT").value,v=toNum($("#tPV").value),q=$("#tM")?toNum($("#tM").value):0,mon=$("#tMon")?$("#tMon").value:"ARS";
+      $("#tPV").disabled=tp==="nada";$("#tPVl").textContent=tp==="monto"?`Monto (${MONEDAS[mon].s})`:"Porcentaje";
+      $("#tPR").textContent=tp==="nada"?`Este turno no suma a lo que le corresponde ${aAdmin()}.`:`Le corresponde ${fmtM(tp==="monto"?Math.round(v):Math.round(q*v/100),mon)} de este turno.`}
+  };
+  pintar();
+  if(!edita){document.querySelectorAll(".panel input,.panel select,#tCo button").forEach(x=>x.disabled=true)}
+  ["tA","tTi","tPT","tPV","tM","tMon"].forEach(i=>{const x=$("#"+i);if(x){x.addEventListener("change",pintar);x.addEventListener("input",pintar)}});
+  $("#tA").addEventListener("change",()=>{if($("#tA").value==="__nuevo")setTimeout(()=>$("#tNn").focus(),30)});
+  $("#tCo").onclick=e=>{const b=e.target.closest("[data-co]");if(!b||!edita)return;co=b.dataset.co;tocado=true;pintar()};
+  let hPrev=$("#tH").value;
+  $("#tH").onchange=()=>{const dur=Math.max(15,aMin($("#tHf").value)-aMin(hPrev));hPrev=$("#tH").value;{const nv=deMin(Math.min(23*60+45,aMin($("#tH").value)+dur));if(![...$("#tHf").options].some(o=>o.value===nv))$("#tHf").insertAdjacentHTML("beforeend",`<option>${nv}</option>`);$("#tHf").value=nv}};
+  $("#tX").onclick=closePanel;
+  if($("#tAlNuevo"))$("#tAlNuevo").onclick=()=>{const f=$("#tF").value||t.fecha,D=parse(f);alumnoPanel(null,{clases:[{d:(D.getDay()+6)%7+1,h:$("#tH").value,hf:$("#tHf").value,fs:f}]})};
+  if($("#tDel"))$("#tDel").onclick=()=>{
+    if(t.pago){panel(`<h2>¿Borrar este turno?</h2><p class="muted" style="margin:0">Ya tiene un pago registrado. Si lo borrás, ese pago deja de figurar en los cobros.</p><div class="actions"><button class="btn ghost" id="tdN">No</button><button class="btn" style="background:var(--late)" id="tdY">Borrar</button></div>`);
+      $("#tdN").onclick=()=>turnoPanel(turnos.find(x=>x.id===t.id));$("#tdY").onclick=()=>{del("turnos",t.id);closePanel();toast("Turno borrado")};return}
+    del("turnos",t.id);closePanel();toast("Turno borrado")};
+  if($("#tOk"))$("#tOk").onclick=()=>{
+    let alumnoId=$("#tA").value;
+    if(!alumnoId){toast("Elegí quién viene.");return}
+    const fecha=$("#tF").value;if(!/^\d{4}-\d{2}-\d{2}$/.test(fecha)){toast("Elegí el día.");return}
+    if(aMin($("#tHf").value)<=aMin($("#tH").value)){toast("La hora de fin tiene que ser después de la de inicio.");return}
+    let nombreNuevo="";
+    if(alumnoId==="__nuevo"){nombreNuevo=$("#tNn").value.trim();if(!nombreNuevo){toast("Escribí el nombre de la persona.");return}}
+    const {aCobrar,aCobrarMoneda,...prev}=nuevo?{}:strip(t);
+    const data={...prev,alumnoId,fecha,h:$("#tH").value,hf:$("#tHf").value,tipo:$("#tTi").value,detalle:$("#tD").value.trim(),cobro:co,por:nuevo?yo.id:(t.por||null)};
+    if(dueno||vm){if(co==="aparte"){data.monto=$("#tM")?toNum($("#tM").value):(Number(t.monto)||0);data.moneda=$("#tMon")?$("#tMon").value:monT(t)}}
+    if(dueno)data.parteAdmin=co==="aparte"&&$("#tPT").value!=="nada"?{tipo:$("#tPT").value,valor:toNum($("#tPV").value)}:null;
+    if(co==="aparte"&&dueno&&data.parteAdmin&&data.parteAdmin.tipo==="pct"&&(data.parteAdmin.valor<0||data.parteAdmin.valor>100)){toast("El porcentaje tiene que estar entre 0 y 100.");return}
+    if(co!=="aparte")data.pago=null;
+    if(nombreNuevo){alumnoId=uid();data.alumnoId=alumnoId;
+      put("alumnos",alumnoId,{nombre:nombreNuevo,curso:"Otro",telefono:$("#tNt").value.trim(),clases:[],soloTurnos:true,inicio:fecha.slice(0,7)<mk(today().getFullYear(),today().getMonth())?fecha.slice(0,7):mk(today().getFullYear(),today().getMonth()),activo:true,por:yo.id,ejemplo:false})}
+    put("turnos",nuevo?uid():t.id,data);closePanel();
+    const a=alumnos.find(x=>x.id===alumnoId);toast(nuevo?`Turno de ${a?a.nombre:""} agendado`:"Cambios guardados");
+  };
+}
+// Botón + del calendario: ¿qué se agrega?
+function agregarEnCalendario(fecha){
+  panel(`<h2 style="font-size:24px">¿Qué querés agregar?</h2>
+    <button class="btn" id="qaT">Turno o extra</button><p class="foot" style="margin:-4px 0 0">Un día suelto: clase extra, grabación, producción, sesión de video… de alguien que ya está cargado o de alguien nuevo.</p>
+    <button class="btn ghost" id="qaA">Alumno nuevo con horario fijo</button><p class="foot" style="margin:-4px 0 0">Viene todas las semanas y paga cuota mensual.</p>
+    <div class="actions"><button class="btn ghost" id="qaX">Cancelar</button></div>`);
+  $("#qaX").onclick=closePanel;$("#qaT").onclick=()=>turnoPanel(null,{fecha:fecha||iso(today())});$("#qaA").onclick=()=>alumnoPanel(null);
 }
 
 /* ---------- vistas ---------- */
@@ -412,7 +571,7 @@ function stripHTML(){
   </div>`;
 }
 function stripAdminHTML(){
-  const {y,m}=cur,corr=correspondeAdmin(y,m),rec=liqMes(y,m).reduce((s,l)=>s+(Number(l.monto)||0),0),act=alumnos.filter(a=>activoEn(a,y,m)).length;
+  const {y,m}=cur,corr=correspondeAdmin(y,m),rec=liqMes(y,m).reduce((s,l)=>s+(Number(l.monto)||0),0),act=alumnos.filter(a=>activoEn(a,y,m)&&!esSoloTurnos(a)).length;
   return `<div class="strip">
     <div><span class="lbl">Te corresponde</span><span class="num v" style="color:var(--paid)">${fmt(corr)}</span><span class="muted" style="font-size:12px">este mes</span></div>
     <div><span class="lbl">Recibido</span><span class="num v">${fmt(rec)}</span><div class="progress"><i style="width:${corr?Math.min(100,rec/corr*100).toFixed(0):0}%"></i></div></div>
@@ -447,6 +606,7 @@ function vCalMes(){
   const clasesDia=d=>{const D0=new Date(y,m,d),wd=(D0.getDay()+6)%7+1,out=[],gr={};for(const a of act)for(const c of clasesDe(a))if(enDia(c,D0,wd)){
       if(GRUPALES.includes(a.curso)){const g=grupoDe(a),k=`${a.curso}|${wd}|${c.h}|${c.hf}|${g}|${c.f}`;if(!gr[k]){gr[k]={curso:a.curso,wd,h:c.h,hf:c.hf,g,f:c.f,miembros:[]};out.push({grupo:gr[k],h:c.h,hf:c.hf,nombre:""})}gr[k].miembros.push(a)}
       else out.push({a,h:c.h,hf:c.hf,nombre:a.nombre})}
+    for(const t of turnosFecha(D0))out.push({turno:t,h:t.h,hf:hfT(t),nombre:tituloT(t)});
     for(const o of out)if(o.grupo){o.grupo.miembros.sort((p,q)=>p.nombre.localeCompare(q.nombre));o.nombre=tituloGrupo(o.grupo.curso,o.grupo.g,o.grupo.miembros.length)}
     return out.sort((p,q)=>p.h.localeCompare(q.h)||p.nombre.localeCompare(q.nombre))};
   const grAttr=c=>`data-grupo="${esc(c.grupo.curso)}|${c.grupo.wd}|${c.grupo.h}|${c.grupo.hf}|${esc(c.grupo.g||"")}|${c.grupo.f||""}"`;
@@ -457,20 +617,21 @@ function vCalMes(){
     if(d<1||d>days){cells+=`<div class="day out" aria-hidden="true"></div>`;continue}
     const cu=verCu?(byDay[d]||[]).slice().sort((a,b)=>a.nombre.localeCompare(b.nombre)):[];
     const cl=verCl?clasesDia(d):[];
-    const items=[...cl.map(c=>`<span class="cl" title="${esc(c.grupo?c.nombre+": "+c.grupo.miembros.map(x=>x.nombre).join(", "):c.nombre)} · clase ${esc(c.h)}"><span class="h">${esc(c.h)}</span><span class="n">${esc(c.nombre)}</span></span>`),...cu.map(a=>evHTML(a,y,m,true))];
+    const items=[...cl.map(c=>`<span class="cl${c.turno?" tu":""}" ${c.turno?`style="--c:${COLOR_TIPO[tipoT(c.turno)]||COLOR_TIPO.Otro}"`:""} title="${esc(c.grupo?c.nombre+": "+c.grupo.miembros.map(x=>x.nombre).join(", "):c.nombre)} · ${c.turno?"turno":"clase"} ${esc(c.h)}"><span class="h">${esc(c.h)}</span><span class="n">${esc(c.nombre)}</span></span>`),...cu.map(a=>evHTML(a,y,m,true))];
     const max=4,shown=items.slice(0,max);
     cells+=`<div class="day ${isCur&&t.getDate()===d?"is-today":""} ${SD===d?"sel":""}" data-day="${d}" role="button" tabindex="0" aria-label="${d}: ${cl.length} clases, ${cu.length} cuotas">
       <span class="dn">${d}</span>
       <span class="evs">${shown.join("")}${items.length>max?`<span class="more">+${items.length-max} más</span>`:""}</span>
-      <span class="dots">${cl.map(()=>`<i class="c"></i>`).join("")}${cu.map(a=>`<i class="${estado(a,y,m)}"></i>`).join("")}</span></div>`;
+      <span class="dots">${cl.map(c=>`<i class="c${c.turno?" tu":""}"></i>`).join("")}${cu.map(a=>`<i class="${estado(a,y,m)}"></i>`).join("")}</span></div>`;
   }
   let det="";
   if(SD&&SD<=days){
     const cu=byDay[SD]||[],cl=clasesDia(SD);
     const fecha=new Date(y,m,SD).toLocaleDateString("es-AR",{weekday:"long",day:"numeric",month:"long"});
     det=`<div class="sheetbox"><div class="subh" style="color:var(--ink);font-size:15px">${fecha}</div>
-      ${verCl?`<div class="subh">Clases</div><div class="tablewrap"><table class="grid" style="min-width:0"><tbody>
-      ${cl.map(c=>`<tr><td style="width:110px"><div class="txt num" style="color:var(--paid)">${esc(c.h)}–${esc(c.hf)}</div></td><td><button class="txt" ${c.grupo?grAttr(c):`data-edit-al="${c.a.id}"`} style="border:0;background:none;color:inherit;text-align:left;padding:0 10px;font-weight:600">${esc(c.nombre)}</button></td><td><div class="txt muted">${esc(c.grupo?c.grupo.miembros.map(x=>x.nombre).join(", "):(c.a.curso||""))}</div></td></tr>`).join("")||`<tr><td><div class="empty" style="padding:12px">No hay clases este día.</div></td></tr>`}
+      ${(esDueno()||puede("editarAlumnos"))?`<button class="btn sm" data-nuevoturno="${iso(new Date(y,m,SD))}" style="align-self:flex-start;margin:6px 10px 2px">+ Agendar turno este día</button>`:""}
+      ${verCl?`<div class="subh">Clases y turnos</div><div class="tablewrap"><table class="grid" style="min-width:0"><tbody>
+      ${cl.map(c=>`<tr><td style="width:110px"><div class="txt num" style="color:var(--paid)">${esc(c.h)}–${esc(c.hf)}</div></td><td><button class="txt" ${c.grupo?grAttr(c):c.turno?`data-turno="${c.turno.id}"`:`data-edit-al="${c.a.id}"`} style="border:0;background:none;color:inherit;text-align:left;padding:0 10px;font-weight:600">${esc(c.nombre)}</button></td><td>${c.turno?`<div style="display:flex;align-items:center;justify-content:flex-end">${turnoPill(c.turno)}</div>`:`<div class="txt muted">${esc(c.grupo?c.grupo.miembros.map(x=>x.nombre).join(", "):(c.a.curso||""))}</div>`}</td></tr>`).join("")||`<tr><td><div class="empty" style="padding:12px">No hay clases este día.</div></td></tr>`}
       </tbody></table></div>`:""}
       ${verCu?`<div class="subh">Cuotas</div><div class="tablewrap"><table class="grid" style="min-width:0"><tbody>
       ${cu.map(a=>{const e=estado(a,y,m);return `<tr><td><button class="txt" data-edit-al="${a.id}" style="border:0;background:none;color:inherit;text-align:left;padding:0 10px;font-weight:600">${esc(a.nombre)}</button></td><td class="num" style="text-align:right;padding:0 10px">${fmtM(a.cuota,monDe(a))}</td><td><button class="pill ${e}" data-cuota="${a.id}" data-ym="${mk(y,m)}">${estTxt[e]}</button></td></tr>`}).join("")||`<tr><td><div class="empty" style="padding:12px">Nadie paga este día.</div></td></tr>`}
@@ -481,9 +642,9 @@ function vCalMes(){
     ${alertsHTML()}${stripHTML()}
     ${calToolbar()}
     <div class="toolbar">
-      <div class="legend"><span><i style="background:transparent;border:1.5px solid var(--ink);border-radius:50%"></i>Clase</span><span><i style="background:var(--paid)"></i>Pagó</span><span><i style="background:var(--pend)"></i>Pendiente</span><span><i style="background:var(--late)"></i>Atrasado</span></div></div>
+      <div class="legend"><span><i style="background:transparent;border:1.5px solid var(--ink);border-radius:50%"></i>Clase</span><span><i style="background:transparent;border:1.5px solid var(--accent);border-radius:3px"></i>Turno</span><span><i style="background:var(--paid)"></i>Pagó</span><span><i style="background:var(--pend)"></i>Pendiente</span><span><i style="background:var(--late)"></i>Atrasado</span></div></div>
     <div class="cal"><div class="cal-head">${DIAS.map(d=>`<div>${d}</div>`).join("")}</div><div class="cal-grid">${cells}</div></div>
-    <div class="toolbar"><span class="foot">Tocá un día para ver clases y cuotas. Tocá un alumno para ver su ficha.</span><button class="btn sm ghost" id="icsBtn">Avisos en el calendario del teléfono</button></div>
+    <div class="toolbar"><span class="foot">Tocá un día para ver clases, turnos y cuotas, o para agendar un turno.</span><button class="btn sm ghost" id="icsBtn">Avisos en el calendario del teléfono</button></div>
     ${det}
   </div>`;
 }
@@ -506,6 +667,7 @@ function clasesFecha(D){
   for(const a of alumnos){if(!activoEn(a,y,m))continue;for(const c of clasesDe(a))if(enDia(c,D,wd)){
     if(GRUPALES.includes(a.curso)){const g=grupoDe(a),k=`${a.curso}|${wd}|${c.h}|${c.hf}|${g}|${c.f}`;(grupos[k]=grupos[k]||{curso:a.curso,wd,h:c.h,hf:c.hf,g,f:c.f,miembros:[]}).miembros.push(a)}
     else out.push({a,s:aMin(c.h),e:aMin(c.hf),t:a.nombre,sub:a.curso||"",color:colorCurso(a.curso),clave:["a",a.id,c.id].join("|")})}}
+  for(const t of turnosFecha(D))out.push({turno:t,s:aMin(t.h),e:Math.max(aMin(hfT(t)),aMin(t.h)+15),t:tituloT(t),sub:t.detalle||precioTxt(t),color:COLOR_TIPO[tipoT(t)]||COLOR_TIPO.Otro,clave:"t|"+t.id});
   for(const g of Object.values(grupos)){g.miembros.sort((p,q)=>p.nombre.localeCompare(q.nombre));out.push({grupo:g,clave:["g",g.curso,g.wd,g.h,g.hf].concat(g.g||g.f?[g.g]:[]).concat(g.f?[g.f]:[]).join("|"),s:aMin(g.h),e:aMin(g.hf),t:tituloGrupo(g.curso,g.g,g.miembros.length),sub:g.miembros.map(x=>x.nombre).join(", "),color:colorCurso(g.curso)})}
   return out;
 }
@@ -519,6 +681,7 @@ function eventosDesdeGoogle(lista,D){
     const s=aMin(ev.s.slice(11,16)),e=ev.e&&ev.e.slice(0,10)===f?aMin(ev.e.slice(11,16)):24*60;
     const partes=String(ev.clave||"").split("|");let o={s,e:Math.max(e,s+15),t:ev.t||"(sin título)",sub:"",color:"#8E8EA0",gev:ev.id};
     if(partes[0]==="a"){const a=alumnos.find(x=>x.id===partes[1]);if(a)o={...o,a,t:a.nombre,sub:a.curso||"",color:colorCurso(a.curso)}}
+    else if(partes[0]==="t"){const tu=turnos.find(x=>x.id===partes[1]);if(!tu||!alDeT(tu))continue;o={...o,turno:tu,t:tituloT(tu),sub:tu.detalle||precioTxt(tu),color:COLOR_TIPO[tipoT(tu)]||COLOR_TIPO.Otro}}
     else if(partes[0]==="g"){const [,curso,wd,h,hf]=partes,g=partes[5]||"",f=partes[6]||"",y=D.getFullYear(),m=D.getMonth();
       const miembros=alumnos.filter(a=>a.curso===curso&&grupoDe(a)===g&&activoEn(a,y,m)&&clasesDe(a).some(c=>String(c.d)===wd&&c.h===h&&c.hf===hf&&c.f===f)).sort((p,q)=>p.nombre.localeCompare(q.nombre));
       // Un ensamble de Google sin integrantes en la app es una serie vieja (por ejemplo, pasó a ser de una sola fecha): no se muestra.
@@ -600,10 +763,10 @@ function vCalAgenda(){
   const todoDia=hayCuotas?`<div class="wk-all" style="grid-template-columns:${cols}"><div class="wk-lbl">Cuotas</div>${datos.map(x=>`<div class="wk-allc">${x.cu.map(a=>evHTML(a,x.D.getFullYear(),x.D.getMonth(),v==="dia"||!isPhone())).join("")}</div>`).join("")}</div>`:"";
   let horas="";for(let m=h0;m<h1;m+=60)horas+=`<div class="wk-h" style="height:${PX}px"><span>${deMin(m)}</span></div>`;
   const columnas=datos.map(x=>{
-    let slots="";for(let m=h0;m<h1;m+=60)slots+=`<button class="slot" style="top:${(m-h0)/60*PX}px;height:${PX}px" data-slot="${iso(x.D)}|${deMin(m)}" aria-label="Agregar clase ${DIAS[(x.D.getDay()+6)%7]} ${deMin(m)}"></button>`;
+    let slots="";for(let m=h0;m<h1;m+=60)slots+=`<button class="slot" style="top:${(m-h0)/60*PX}px;height:${PX}px" data-slot="${iso(x.D)}|${deMin(m)}" aria-label="Agendar ${DIAS[(x.D.getDay()+6)%7]} ${deMin(m)}"></button>`;
     const evs=x.cl.map(e=>{const top=(e.s-h0)/60*PX,h=Math.max(20,(e.e-e.s)/60*PX-2),w=100/e.n,corto=h<40;
-      const dest=e.a?`data-edit-al="${e.a.id}"`:e.grupo?`data-grupo="${esc(e.grupo.curso)}|${e.grupo.wd}|${e.grupo.h}|${e.grupo.hf}|${esc(e.grupo.g||"")}|${e.grupo.f||""}"`:`data-gev="${esc(e.gev||"")}"`;
-      return `<button class="wk-ev ${corto?"corto":""} ${e.grupo?"grp":""}" ${dest} style="top:${top}px;height:${h}px;left:calc(${e.lane*w}% + 2px);width:calc(${w}% - 4px);--c:${e.color}" title="${esc(e.t)} · ${deMin(e.s)}–${deMin(e.e)}${e.sub?" · "+esc(e.sub):""}"><span class="en">${esc(e.t)}</span><span class="et">${deMin(e.s)}–${deMin(e.e)}${!corto&&e.sub?" · "+esc(e.sub):""}</span></button>`}).join("");
+      const dest=e.turno?`data-turno="${e.turno.id}"`:e.a?`data-edit-al="${e.a.id}"`:e.grupo?`data-grupo="${esc(e.grupo.curso)}|${e.grupo.wd}|${e.grupo.h}|${e.grupo.hf}|${esc(e.grupo.g||"")}|${e.grupo.f||""}"`:`data-gev="${esc(e.gev||"")}"`;
+      return `<button class="wk-ev ${corto?"corto":""} ${e.grupo?"grp":""} ${e.turno?"tu":""}" ${dest} style="top:${top}px;height:${h}px;left:calc(${e.lane*w}% + 2px);width:calc(${w}% - 4px);--c:${e.color}" title="${esc(e.t)} · ${deMin(e.s)}–${deMin(e.e)}${e.sub?" · "+esc(e.sub):""}"><span class="en">${esc(e.t)}</span><span class="et">${deMin(e.s)}–${deMin(e.e)}${!corto&&e.sub?" · "+esc(e.sub):""}</span></button>`}).join("");
     let linea="";if(esHoy(x.D)){const nm=ahora.getHours()*60+ahora.getMinutes();if(nm>=h0&&nm<=h1)linea=`<div class="ahora" style="top:${(nm-h0)/60*PX}px"></div>`}
     return `<div class="wk-col ${esHoy(x.D)?"hoy":""}" style="height:${alto}px;background-size:100% ${PX}px">${slots}${evs}${linea}</div>`}).join("");
   const totalCl=datos.reduce((s,x)=>s+x.cl.length,0);
@@ -612,7 +775,7 @@ function vCalAgenda(){
     ${calToolbar()}
     ${tira}
     <div class="wk ${v}">${cab}${todoDia}<div class="wk-body" style="grid-template-columns:${cols}"><div class="wk-hours">${horas}</div>${columnas}</div></div>
-    <div class="toolbar"><span class="foot">${totalCl?`${totalCl} clase${totalCl===1?"":"s"} ${v==="dia"?"este día":"esta semana"}. `:"No hay clases cargadas para estos días. "}Tocá una clase para ver la ficha del alumno, o un horario libre para cargar uno nuevo.</span><button class="btn sm ghost" id="icsBtn">Avisos en el calendario del teléfono</button></div>
+    <div class="toolbar"><span class="foot">${totalCl?`${totalCl} ${totalCl===1?"actividad":"actividades"} ${v==="dia"?"este día":"esta semana"}. `:"No hay clases ni turnos para estos días. "}Tocá una clase para ver la ficha, o un horario libre para agendar quién viene.</span><button class="btn sm ghost" id="icsBtn">Avisos en el calendario del teléfono</button></div>
   </div>`;
 }
 function vCal(){return vistaCal()==="mes"?vCalMes():vCalAgenda()}
@@ -628,7 +791,7 @@ function vAlumnos(){
     <td class="rn">${i+1}</td>
     <td class="first"><input id="n-${a.id}" data-f="nombre" value="${esc(a.nombre)}" aria-label="Nombre"></td>
     <td><select id="c-${a.id}" data-f="curso" aria-label="Curso">${opt(CURSOS,a.curso)}</select></td>
-    <td><button class="txt sched" data-edit-al="${a.id}" style="border:0;background:none;padding:0 10px;text-align:left;white-space:nowrap">${grupoDe(a)&&GRUPALES.includes(a.curso)?`<b style="color:var(--ink)">${esc(grupoDe(a))}</b> · `:""}${esc(horarioTxt(a))||'<span style="color:var(--accent)">+ Cargar horario</span>'}</button></td>
+    <td><button class="txt sched" data-edit-al="${a.id}" style="border:0;background:none;padding:0 10px;text-align:left;white-space:nowrap">${grupoDe(a)&&GRUPALES.includes(a.curso)?`<b style="color:var(--ink)">${esc(grupoDe(a))}</b> · `:""}${esc(horarioTxt(a))||(esSoloTurnos(a)?'<span class="muted">Solo turnos</span>':'<span style="color:var(--accent)">+ Cargar horario</span>')}</button></td>
     <td><div style="display:flex;align-items:center">${monDe(a)!=="ARS"?`<span class="by" style="padding-left:8px">${MONEDAS[monDe(a)].s}</span>`:""}<input id="q-${a.id}" class="money" data-f="cuota" inputmode="numeric" value="${a.cuota||""}" aria-label="Cuota"></div></td>
     <td><input id="d-${a.id}" data-f="diaPago" type="number" min="1" max="31" value="${a.diaPago||""}" aria-label="Día de pago" style="text-align:center"></td>
     <td><input id="t-${a.id}" data-f="telefono" value="${esc(a.telefono||"")}" placeholder="—" aria-label="Teléfono"></td>
@@ -658,18 +821,22 @@ function vCobros(){
   const {y,m}=cur,key=mk(y,m);
   const hechos=Object.values(pagos).filter(p=>p.mes===key).map(p=>({...p,al:alumnos.find(a=>a.id===p.alumnoId)})).sort((a,b)=>(b.fecha||"").localeCompare(a.fecha||""));
   const falta=alumnos.filter(a=>activoEn(a,y,m)&&!pagoDe(a,y,m)).sort((a,b)=>diaVence(a,y,m)-diaVence(b,y,m));
-  const tot=hechos.reduce((s,p)=>s+enPesos(p.monto,p.moneda||monDe(p.al)),0);
+  const tFalta=turnosMes(y,m).filter(t=>tAparte(t)&&!t.pago).sort((p,q)=>(p.fecha+p.h).localeCompare(q.fecha+q.h));
+  const tHechos=turnosMes(y,m).filter(t=>tAparte(t)&&t.pago).sort((p,q)=>String(q.pago.fecha||"").localeCompare(String(p.pago.fecha||"")));
+  const tot=hechos.reduce((s,p)=>s+enPesos(p.monto,p.moneda||monDe(p.al)),0)+tHechos.reduce((s,t)=>s+enPesos(t.pago.monto,t.pago.moneda||monT(t)),0);
+  const filaFaltaT=t=>{const e=estadoT(t),D=parse(t.fecha);return `<tr><td><button class="txt" data-turno="${t.id}" style="border:0;background:none;color:inherit;text-align:left;padding:0 10px"><b>${esc(alDeT(t).nombre)}</b> <span class="muted">· ${esc(tipoT(t))}</span></button></td><td><span class="pill ${e}">${D.getDate()}/${D.getMonth()+1}</span></td><td class="num" style="text-align:right;padding:0 10px">${puede("verMontos")?fmtM(t.monto,monT(t)):"—"}</td><td>${puede("registrarCobros")?`<button class="btn sm paid" style="margin:0 8px" data-cobrot="${t.id}">Cobrar</button>`:""}</td></tr>`};
+  const filaHechoT=t=>{const p=t.pago;return `<tr><td><div class="txt num" style="font-weight:500">${p.fecha?parse(p.fecha).toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit"}):"—"}</div></td><td><button class="txt" style="border:0;background:none;padding:0 10px;text-align:left;font-weight:600" data-cobrot="${t.id}">${esc(alDeT(t).nombre)} <span class="muted" style="font-weight:500">· ${esc(tipoT(t))}</span></button></td><td><div class="txt muted">${esc(p.medio||"")}</div></td><td><div class="txt by">${esc(quien(p.por))}</div></td><td class="num" style="text-align:right;padding:0 10px">${puede("verMontos")?fmtM(p.monto,p.moneda||monT(t)):"—"}</td></tr>`};
   return `<div style="display:flex;flex-direction:column;gap:14px">
     ${stripHTML()}
     <div class="cols">
     <div class="sheetbox"><div style="padding:12px 14px"><h2>Faltan pagar</h2></div><div class="tablewrap"><table class="grid" style="min-width:0">
       <thead><tr><th>Alumno</th><th>Vence</th><th style="text-align:right">Cuota</th><th></th></tr></thead><tbody>
-      ${falta.filter(tieneCuota).map(a=>{const e=estado(a,y,m);return `<tr><td><div class="txt"><b>${esc(a.nombre)}</b></div></td><td><span class="pill ${e}">${diaVence(a,y,m)}/${m+1}</span></td><td class="num" style="text-align:right;padding:0 10px">${puede("verMontos")?fmtM(a.cuota,monDe(a)):"—"}</td><td>${puede("registrarCobros")?`<button class="btn sm paid" style="margin:0 8px" data-cuota="${a.id}" data-ym="${key}">Cobrar</button>`:""}</td></tr>`}).join("")||`<tr><td colspan="4"><div class="empty">Todos pagaron este mes.</div></td></tr>`}
+      ${falta.filter(tieneCuota).map(a=>{const e=estado(a,y,m);return `<tr><td><div class="txt"><b>${esc(a.nombre)}</b></div></td><td><span class="pill ${e}">${diaVence(a,y,m)}/${m+1}</span></td><td class="num" style="text-align:right;padding:0 10px">${puede("verMontos")?fmtM(a.cuota,monDe(a)):"—"}</td><td>${puede("registrarCobros")?`<button class="btn sm paid" style="margin:0 8px" data-cuota="${a.id}" data-ym="${key}">Cobrar</button>`:""}</td></tr>`}).concat(tFalta.map(filaFaltaT)).join("")||`<tr><td colspan="4"><div class="empty">Todos pagaron este mes.</div></td></tr>`}
     </tbody></table></div></div>
     <div class="sheetbox"><div style="padding:12px 14px"><h2>Cobrado en el mes</h2></div><div class="tablewrap"><table class="grid" style="min-width:0">
       <thead><tr><th>Fecha</th><th>Alumno</th><th>Medio</th><th>Registró</th><th style="text-align:right">Monto</th></tr></thead><tbody>
-      ${hechos.map(p=>`<tr><td><div class="txt num" style="font-weight:500">${p.fecha?parse(p.fecha).toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit"}):"—"}</div></td><td><button class="txt" style="border:0;background:none;padding:0 10px;text-align:left;font-weight:600" data-cuota="${p.alumnoId}" data-ym="${key}">${esc(p.al?p.al.nombre:"(alumno borrado)")}</button></td><td><div class="txt muted">${esc(p.medio||"")}</div></td><td><div class="txt by">${esc(quien(p.por))}</div></td><td class="num" style="text-align:right;padding:0 10px">${puede("verMontos")?fmtM(p.monto,p.moneda||monDe(p.al)):"—"}</td></tr>`).join("")||`<tr><td colspan="5"><div class="empty">Todavía no hay cobros este mes.</div></td></tr>`}
-    </tbody><tfoot><tr><td colspan="4">${puede("verMontos")?"Total"+(hechos.some(p=>(p.moneda||monDe(p.al))!=="ARS")?" en pesos":""):hechos.length+" cobros"}</td><td class="num" style="text-align:right">${puede("verMontos")?fmt(tot):""}</td></tr></tfoot></table></div></div>
+      ${hechos.map(p=>`<tr><td><div class="txt num" style="font-weight:500">${p.fecha?parse(p.fecha).toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit"}):"—"}</div></td><td><button class="txt" style="border:0;background:none;padding:0 10px;text-align:left;font-weight:600" data-cuota="${p.alumnoId}" data-ym="${key}">${esc(p.al?p.al.nombre:"(alumno borrado)")}</button></td><td><div class="txt muted">${esc(p.medio||"")}</div></td><td><div class="txt by">${esc(quien(p.por))}</div></td><td class="num" style="text-align:right;padding:0 10px">${puede("verMontos")?fmtM(p.monto,p.moneda||monDe(p.al)):"—"}</td></tr>`).concat(tHechos.map(filaHechoT)).join("")||`<tr><td colspan="5"><div class="empty">Todavía no hay cobros este mes.</div></td></tr>`}
+    </tbody><tfoot><tr><td colspan="4">${puede("verMontos")?"Total"+(hechos.some(p=>(p.moneda||monDe(p.al))!=="ARS")||tHechos.some(t=>monT(t)!=="ARS")?" en pesos":""):(hechos.length+tHechos.length)+" cobros"}</td><td class="num" style="text-align:right">${puede("verMontos")?fmt(tot):""}</td></tr></tfoot></table></div></div>
     </div></div>`;
 }
 function vGastos(){
@@ -699,15 +866,15 @@ function vGastos(){
 }
 function vMisPagos(){
   const {y,m}=cur,act=alumnos.filter(a=>activoEn(a,y,m)).sort((p,q)=>parteDe(q)-parteDe(p)||p.nombre.localeCompare(q.nombre));
-  const corr=act.reduce((s,a)=>s+parteDe(a),0),liq=liqMes(y,m).sort((p,q)=>String(q.fecha).localeCompare(String(p.fecha))),rec=liq.reduce((s,l)=>s+(Number(l.monto)||0),0);
+  const corr=correspondeAdmin(y,m),liq=liqMes(y,m).sort((p,q)=>String(q.fecha).localeCompare(String(p.fecha))),rec=liq.reduce((s,l)=>s+(Number(l.monto)||0),0);
   const meses=[];for(let i=5;i>=0;i--){const d=new Date(y,m-i,1);const yy=d.getFullYear(),mm=d.getMonth();const c=correspondeAdmin(yy,mm),r=liqMes(yy,mm).reduce((s,l)=>s+(Number(l.monto)||0),0);if(c||r)meses.push({d,c,r})}
   const mesTxt=new Date(y,m,1).toLocaleDateString("es-AR",{month:"long",year:"numeric"});
   return `<div style="display:flex;flex-direction:column;gap:14px">
     ${stripAdminHTML()}
     <div class="cols">
-    <div class="sheetbox"><div style="padding:12px 14px"><h2>Tu parte por alumno</h2><div class="by">${esc(mesTxt)}</div></div><div class="tablewrap"><table class="grid" style="min-width:0">
+    <div class="sheetbox"><div style="padding:12px 14px"><h2>Tu parte por alumno y turno</h2><div class="by">${esc(mesTxt)}</div></div><div class="tablewrap"><table class="grid" style="min-width:0">
       <thead><tr><th>Alumno</th><th>Curso</th><th style="text-align:right">Te corresponde</th></tr></thead><tbody>
-      ${act.map(a=>`<tr><td><button class="txt" data-edit-al="${a.id}" style="border:0;background:none;color:inherit;text-align:left;padding:0 10px;font-weight:600">${esc(a.nombre)}</button></td><td><div class="txt muted">${esc(a.curso||"")}</div></td><td class="num" style="text-align:right;padding:0 10px">${fmtM(parteOrig(a),parteMon(a))}</td></tr>`).join("")||`<tr><td colspan="3"><div class="empty">No hay alumnos activos este mes.</div></td></tr>`}
+      ${act.filter(a=>!esSoloTurnos(a)).map(a=>`<tr><td><button class="txt" data-edit-al="${a.id}" style="border:0;background:none;color:inherit;text-align:left;padding:0 10px;font-weight:600">${esc(a.nombre)}</button></td><td><div class="txt muted">${esc(a.curso||"")}</div></td><td class="num" style="text-align:right;padding:0 10px">${fmtM(parteOrig(a),parteMon(a))}</td></tr>`).concat(turnosMes(y,m).filter(tAparte).sort((p,q)=>p.fecha.localeCompare(q.fecha)).map(t=>`<tr><td><button class="txt" data-turno="${t.id}" style="border:0;background:none;color:inherit;text-align:left;padding:0 10px;font-weight:600">${esc(alDeT(t).nombre)}</button></td><td><div class="txt muted">${esc(tipoT(t))} ${parse(t.fecha).getDate()}/${parse(t.fecha).getMonth()+1}</div></td><td class="num" style="text-align:right;padding:0 10px">${fmtM(parteTOrig(t),parteTMon(t))}</td></tr>`)).join("")||`<tr><td colspan="3"><div class="empty">No hay alumnos activos este mes.</div></td></tr>`}
       </tbody><tfoot><tr><td colspan="2">Total del mes</td><td class="num" style="text-align:right">${fmt(corr)}</td></tr></tfoot></table></div></div>
     <div style="display:flex;flex-direction:column;gap:14px">
     <div class="sheetbox"><div style="padding:12px 14px"><h2>Pagos recibidos</h2><div class="by">${esc(mesTxt)}</div></div><div class="tablewrap"><table class="grid" style="min-width:0">
@@ -723,7 +890,7 @@ function adminCardHTML(){
     <div class="kv"><span>Le corresponde este mes</span><span class="num">${fmt(corr)}</span></div>
     <div class="kv"><span>Ya le pagaste</span><span class="num" style="color:var(--paid)">${fmt(rec)}</span></div>
     <div class="kv"><span>Falta pagarle</span><span class="num">${fmt(Math.max(0,corr-rec))}</span></div>
-    <p class="foot" style="margin:0">General: ${esc(parteTxt(parteGeneral()))} de cada cuota. Se puede cambiar por alumno en su ficha.</p>
+    <p class="foot" style="margin:0">General: ${esc(parteTxt(parteGeneral()))} de cada cuota. Se puede cambiar por alumno en su ficha. En los turnos que se cobran aparte lo elegís en cada turno.</p>
     ${liq.length?`<div class="mlist">${liq.map(l=>`<button class="mrow" data-liq="${l.id}"><span class="av" style="font-family:var(--f-cond);font-size:14px">${l.fecha?parse(l.fecha).getDate():"—"}</span><span style="min-width:0"><div class="t">${fmt(l.monto)}</div><div class="s">${esc(l.nota||"Pago")}</div></span><span></span></button>`).join("")}</div>`:""}
     <button class="btn" id="admPagar">Registrar pago ${esc(aAdmin())}</button></div>`;
 }
@@ -902,7 +1069,7 @@ function vAlumnosPhone(){
     <div class="toolbar"><span class="by">${list.length} alumnos · ${vm?fmt(tot)+" por mes":"tu parte "+fmt(tot)+" por mes"}</span><label class="check"><input type="checkbox" id="verInac" ${verInactivos?"checked":""}> De baja</label></div>
     <div class="mlist">${list.map(a=>{const e=estado(a,y,m);return `<div class="mrow ${a.activo===false?"off":""}">
       <button class="av" data-edit-al="${a.id}" aria-label="Editar ${esc(a.nombre)}">${esc(inicial(a.nombre))}</button>
-      <button data-edit-al="${a.id}" style="border:0;background:none;text-align:left;padding:0;min-width:0;color:inherit"><div class="t">${esc(a.nombre)}</div><div class="s">${esc(a.curso||"")}${vc?" · paga el "+(a.diaPago||"—"):""}${a.fin&&a.activo===false?" · baja desde "+esc(finTxt(a)):""}</div>${horarioTxt(a)?`<div class="sched">${esc(horarioTxt(a))}</div>`:`<div class="sched" style="color:var(--accent)">Sin horario</div>`}</button>
+      <button data-edit-al="${a.id}" style="border:0;background:none;text-align:left;padding:0;min-width:0;color:inherit"><div class="t">${esc(a.nombre)}</div><div class="s">${esc(a.curso||"")}${vc?" · paga el "+(a.diaPago||"—"):""}${a.fin&&a.activo===false?" · baja desde "+esc(finTxt(a)):""}</div>${horarioTxt(a)?`<div class="sched">${esc(horarioTxt(a))}</div>`:esSoloTurnos(a)?`<div class="sched">Solo turnos y extras${turnosDe(a).length?" · "+turnosDe(a).length:""}</div>`:`<div class="sched" style="color:var(--accent)">Sin horario</div>`}</button>
       <div class="r">${vm?`<span class="num">${fmtM(a.cuota,monDe(a))}</span>`:`<span class="num" title="Lo que te corresponde por mes">${fmtM(parteOrig(a),parteMon(a))}</span><span class="by">tu parte</span>`}${!vc?(a.activo===false?`<span class="pill na">De baja</span>`:""):e==="na"?`<span class="pill na">${a.activo===false?"De baja":"—"}</span>`:`<button class="pill ${e}" data-cuota="${a.id}" data-ym="${mk(y,m)}">${estTxt[e]}</button>`}</div></div>`}).join("")||`<div class="empty">Todavía no hay alumnos. Tocá + para cargar el primero.</div>`}</div>
   </div>`;
 }
@@ -933,8 +1100,9 @@ function claseRowHTML(c,i){
 function leerClases(){return [...document.querySelectorAll("[data-clrow]")].map(r=>{const un=r.querySelector("[data-cr]").value==="dia",f=un?r.querySelector("[data-cfe]").value:"";
   return {id:r.dataset.clid||uid(),d:f?(parse(f).getDay()+6)%7+1:+r.querySelector("[data-cd]").value,h:r.querySelector("[data-ch]").value||"18:00",hf:r.querySelector("[data-cf]").value||"19:00",...(un?{f:f||"?"}:{})}}).filter(c=>c.d>=1&&c.d<=7)}
 function clasesValidas(cl){if(cl.some(c=>c.f==="?")){toast("Elegí la fecha de la clase de un solo día.");return false}const mal=cl.find(c=>aMin(c.hf)<=aMin(c.h));if(mal){toast(`La clase del ${mal.f?fechaCorta(mal.f):DIAS_L[mal.d-1].toLowerCase()} tiene que terminar después de las ${mal.h}.`);return false}return true}
-function alumnoPanel(a,pre){
+function alumnoPanel(a,pre,vista){
   const nuevo=!a;a=a||{nombre:"",curso:"Canto",cuota:"",diaPago:10,telefono:"",clases:[{d:1,h:"18:00",hf:"19:00"}],...(pre||{})};
+  if(!nuevo&&!vista&&esSoloTurnos(a))vista="turnos";
   const cls=clasesDe(a).map((c,i)=>({...c,fs:((a.clases||[])[i]||{}).fs||""}));
   const baja=a.activo===false;
   const dueno=esDueno(),edita=dueno||puede("editarAlumnos");
@@ -948,7 +1116,19 @@ function alumnoPanel(a,pre){
       <div class="field"><label for="aPV" id="aPVl">${pa.tipo==="monto"?"Monto por mes":"Porcentaje"}</label><input id="aPV" inputmode="decimal" value="${pa.tipo==="general"?"":esc(pa.valor)}" ${pa.tipo==="general"?"disabled":""}></div></div>
     <p class="by" id="aPR" style="margin:0"></p>`
     :`<div class="card" style="background:var(--head)"><div class="kv"><span>Tu parte por mes</span><span class="num" style="color:var(--paid)">${fmtM(parteOrig(a),parteMon(a))}</span></div>${puede("verMontos")?`<div class="kv"><span>Cuota</span><span class="num">${fmtM(a.cuota,monDe(a))}</span></div>`:""}${puede("verCobros")&&a.diaPago?`<div class="kv"><span>Paga el día</span><span>${a.diaPago}</span></div>`:""}</div>`;
+  const tl=nuevo?[]:turnosDe(a),hoyF=iso(today()),prox=tl.filter(t=>t.fecha>=hoyF).reverse(),pasados=tl.filter(t=>t.fecha<hoyF);
+  const debe=tl.filter(t=>tAparte(t)&&!t.pago);
+  const solapa=nuevo?"":`<div class="seg" role="tablist" aria-label="Ficha" style="align-self:flex-start"><button type="button" data-ftab="fi" aria-pressed="${vista!=="turnos"}">Ficha</button><button type="button" data-ftab="tu" aria-pressed="${vista==="turnos"}">Turnos y extras${tl.length?" ("+tl.length+")":""}</button></div>
+    <div id="fTu" style="display:${vista==="turnos"?"flex":"none"};flex-direction:column;gap:12px">
+      ${edita?`<button class="btn" data-nuevoturno="${hoyF}" data-al="${a.id}" style="align-self:flex-start">+ Agendar turno o extra</button>`:""}
+      <p class="foot" style="margin:0">Clase extra, grabación, producción, sesión de video… Cada turno aparece en el calendario y, si se cobra aparte, tiene su propio pago, separado de la cuota.</p>
+      ${puede("verCobros")&&debe.length?`<div class="alert late"><p><b>Turnos sin pagar:</b> ${debe.length}${puede("verMontos")?" · "+esc(fmt(debe.reduce((s2,t)=>s2+enPesos(t.monto,monT(t)),0))):""}</p></div>`:""}
+      <div class="lbl">Próximos</div>${prox.length?`<div class="mlist">${prox.map(t=>turnoRowHTML(t,false)).join("")}</div>`:`<div class="empty" style="padding:10px">No tiene turnos agendados.</div>`}
+      ${pasados.length?`<div class="lbl">Anteriores</div><div class="mlist">${pasados.slice(0,30).map(t=>turnoRowHTML(t,false)).join("")}</div>`:""}
+      <div class="actions"><button class="btn ghost" id="fTuX">Cerrar</button></div>
+    </div>`;
   panel(`<h2 style="font-size:24px">${nuevo?"Nuevo alumno":esc(a.nombre)}</h2>
+    ${solapa}<div id="fFi" style="display:${vista==="turnos"?"none":"contents"}">
     ${baja?`<div class="alert late"><p><b>De baja</b>${a.fin?" desde "+esc(finTxt(a)):""}. No aparece en el calendario ni en los cobros desde ese mes.</p></div>`:""}
     <div class="field"><label for="aN">Nombre y apellido</label><input id="aN" autocomplete="off" value="${esc(a.nombre)}"></div>
     <div class="two"><div class="field"><label for="aC">Curso</label><select id="aC">${CURSOS.map(c=>`<option ${c===a.curso?"selected":""}>${c}</option>`).join("")}</select></div>
@@ -959,7 +1139,10 @@ function alumnoPanel(a,pre){
     <button type="button" class="btn sm ghost" id="clAdd" style="align-self:flex-start">+ Otro día de clase</button>
     ${seccionCuota}
     <div class="actions"><button class="btn ghost" id="aX">${edita?"Cancelar":"Cerrar"}</button>${edita?`<button class="btn" id="aOk">${nuevo?"Agregar alumno":"Guardar cambios"}</button>`:""}</div>
-    ${nuevo?"":`<div class="actions">${dueno||puede("bajasAlumnos")?`<button class="btn ghost" id="aBaja" style="${baja?"":"color:var(--late);border-color:var(--late)"}">${baja?"Reactivar alumno":"Dar de baja"}</button>`:""}${dueno?`<button class="btn ghost" id="aDel">Eliminar</button>`:""}</div>`}`);
+    ${nuevo?"":`<div class="actions">${dueno||puede("bajasAlumnos")?`<button class="btn ghost" id="aBaja" style="${baja?"":"color:var(--late);border-color:var(--late)"}">${baja?"Reactivar alumno":"Dar de baja"}</button>`:""}${dueno?`<button class="btn ghost" id="aDel">Eliminar</button>`:""}</div>`}
+    </div>`);
+  document.querySelectorAll("[data-ftab]").forEach(b=>b.onclick=()=>{const tu=b.dataset.ftab==="tu";document.querySelectorAll("[data-ftab]").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));$("#fFi").style.display=tu?"none":"contents";$("#fTu").style.display=tu?"flex":"none"});
+  if($("#fTuX"))$("#fTuX").onclick=closePanel;
   if(!edita){document.querySelectorAll(".panel input,.panel select").forEach(x=>x.disabled=true);const ca=$("#clAdd");if(ca)ca.hidden=true;document.querySelectorAll("[data-clx]").forEach(x=>x.hidden=true)}
   if(dueno){
     const calc=()=>{const t=$("#aPT").value,v=toNum($("#aPV").value),q=toNum($("#aQ").value);
@@ -1008,9 +1191,9 @@ function bajaPanel(a){
 }
 function reactivar(a){const {fin,...r}=strip(a);put("alumnos",a.id,{...r,activo:true,fin:""});closePanel();toast(`${a.nombre} reactivado`)}
 function eliminarPanel(a){
-  panel(`<h2>¿Eliminar a ${esc(a.nombre)}?</h2><p class="muted" style="margin:0">Se borra el alumno y todos sus pagos. Si dejó de venir, mejor dalo de baja: así queda el historial de lo que pagó.</p><div class="actions"><button class="btn ghost" id="dB">Dar de baja</button><button class="btn" style="background:var(--late)" id="dY">Eliminar</button></div>`);
+  panel(`<h2>¿Eliminar a ${esc(a.nombre)}?</h2><p class="muted" style="margin:0">Se borra el alumno con todos sus pagos y turnos. Si dejó de venir, mejor dalo de baja: así queda el historial de lo que pagó.</p><div class="actions"><button class="btn ghost" id="dB">Dar de baja</button><button class="btn" style="background:var(--late)" id="dY">Eliminar</button></div>`);
   $("#dB").onclick=()=>bajaPanel(a);
-  $("#dY").onclick=()=>{Object.keys(pagos).filter(k=>k.startsWith(a.id+"_")).forEach(k=>del("pagos",k));del("alumnos",a.id);closePanel();toast("Eliminado")};
+  $("#dY").onclick=()=>{Object.keys(pagos).filter(k=>k.startsWith(a.id+"_")).forEach(k=>del("pagos",k));turnosDe(a).forEach(t=>del("turnos",t.id));del("alumnos",a.id);closePanel();toast("Eliminado")};
 }
 function gastoPanel(g){
   const nuevo=!g;const t=today();
@@ -1118,7 +1301,10 @@ document.addEventListener("click",ev=>{
   const lq=T.closest("[data-liq]");if(lq){const l=liquidaciones.find(x=>x.id===lq.dataset.liq);if(l&&esDueno())liquidacionPanel(l);return}
   if(T.id==="admPagar"){liquidacionPanel(null);return}
   if(T.id==="admPerm"){panelPermisos();return}
-  const sl=T.closest("[data-slot]");if(sl){if(!(esDueno()||puede("editarAlumnos")))return;const [f,h]=sl.dataset.slot.split("|"),D=parse(f);alumnoPanel(null,{clases:[{d:(D.getDay()+6)%7+1,h,hf:deMin(Math.min(23*60+45,aMin(h)+60)),fs:f}]});return}
+  const sl=T.closest("[data-slot]");if(sl){if(!(esDueno()||puede("editarAlumnos")))return;const [f,h]=sl.dataset.slot.split("|");turnoPanel(null,{fecha:f,h});return}
+  const ct=T.closest("[data-cobrot]");if(ct){ev.stopPropagation();cobroTurnoPanel(ct.dataset.cobrot);return}
+  const tu=T.closest("[data-turno]");if(tu){ev.stopPropagation();const x=turnos.find(z=>z.id===tu.dataset.turno);if(x)turnoPanel(x);return}
+  const nt=T.closest("[data-nuevoturno]");if(nt){ev.stopPropagation();const p={fecha:nt.dataset.nuevoturno};if(nt.dataset.al)p.alumnoId=nt.dataset.al;turnoPanel(null,p);return}
   const dy=T.closest("[data-day]");if(dy){const d=+dy.dataset.day;selDay=selDay===d?null:d;render();return}
   const cvw=T.closest("[data-calview]");if(cvw){calView=cvw.dataset.calview;if(calView!=="mes"&&!calAnchor){const t=today();calAnchor=(t.getFullYear()===cur.y&&t.getMonth()===cur.m)?t:new Date(cur.y,cur.m,1)}render();return}
   const cn=T.closest("[data-calnav]");if(cn){moverCal(cn.dataset.calnav);return}
@@ -1154,7 +1340,7 @@ document.addEventListener("change",ev=>{
 document.addEventListener("input",ev=>{if(ev.target.id==="buscar"){buscar=ev.target.value;const pos=ev.target.selectionStart;render();const s=$("#buscar");if(s){s.focus();s.setSelectionRange(pos,pos)}}});
 document.addEventListener("focusout",()=>{setTimeout(()=>{if(pendingRender)safeRender()},50)});
 $("#addAlumno").onclick=nuevoAlumnoPanel;
-$("#fab").onclick=()=>tab==="gastos"?gastoPanel(null):alumnoPanel(null);
+$("#fab").onclick=()=>tab==="gastos"?gastoPanel(null):tab==="cal"?agregarEnCalendario(selDay&&vistaCal()==="mes"?iso(new Date(cur.y,cur.m,selDay)):vistaCal()!=="mes"&&calAnchor?iso(calAnchor):iso(today())):alumnoPanel(null);
 document.addEventListener("click",ev=>{
   const eg=ev.target.closest("[data-edit-g]");if(eg){const g=gastos.find(x=>x.id===eg.dataset.editG);if(g)gastoPanel(g)}
 });
@@ -1164,7 +1350,7 @@ $("#prevM").onclick=()=>{const d=new Date(cur.y,cur.m-1,1);cur={y:d.getFullYear(
 $("#nextM").onclick=()=>{const d=new Date(cur.y,cur.m+1,1);cur={y:d.getFullYear(),m:d.getMonth()};selDay=null;calAnchor=null;render()};
 
 /* ---------- arranque ---------- */
-function local(){try{const r=JSON.parse(localStorage.getItem(LS)||"null");if(r){alumnos=r.alumnos||[];pagos=r.pagos||{};gastos=r.gastos||[];liquidaciones=r.liquidaciones||[];config=r.config||{}}}catch(e){}loaded=true;render()}
+function local(){try{const r=JSON.parse(localStorage.getItem(LS)||"null");if(r){alumnos=r.alumnos||[];pagos=r.pagos||{};gastos=r.gastos||[];liquidaciones=r.liquidaciones||[];turnos=r.turnos||[];config=r.config||{}}}catch(e){}loaded=true;render()}
 render();
 let fb=setTimeout(()=>{if(!loaded)local()},4000);
 (async()=>{
@@ -1174,9 +1360,10 @@ let fb=setTimeout(()=>{if(!loaded)local()},4000);
   let db=null;try{db=await c.use("db")}catch(e){}
   if(!db){clearTimeout(fb);if(!loaded)local();return}
   clearTimeout(fb);
-  cols={alumnos:db.collection("alumnos"),pagos:db.collection("pagos"),gastos:db.collection("gastos"),liquidaciones:db.collection("liquidaciones"),config:db.collection("config")};
+  cols={alumnos:db.collection("alumnos"),pagos:db.collection("pagos"),gastos:db.collection("gastos"),liquidaciones:db.collection("liquidaciones"),turnos:db.collection("turnos"),config:db.collection("config")};
   const got={alumnos:false,pagos:false,gastos:false};
   cols.liquidaciones.onSnapshot(s=>{liquidaciones=s.docs.map(d=>({id:d.id,...d.data()}));safeRender()},()=>{});
+  cols.turnos.onSnapshot(s=>{turnos=s.docs.map(d=>({id:d.id,...d.data()}));safeRender()},()=>{});
   cols.config.onSnapshot(s=>{config={};s.docs.forEach(d=>config[d.id]={...d.data()});safeRender()},()=>{});
   const done=k=>{got[k]=true;if(got.alumnos&&got.pagos&&got.gastos)loaded=true;resolverNombres();safeRender()};
   const fail=()=>toast("Sin conexión con tu cuenta. Revisá internet y recargá.");
