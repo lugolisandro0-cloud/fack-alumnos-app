@@ -1,6 +1,6 @@
 {
- "version": "1.7.0",
- "sha256": "acd0be18682285a53e0986e7c32996278a4b042111a77971d188cbeac3e75c11",
- "notas": "Turnos y extras: clases extra, grabaciones, producción y sesiones de video en el calendario, con cobro aparte",
+ "version": "1.8.0",
+ "sha256": "522600a05001a41ff81c2b2cdc530b554b6612386cd9b9da8a6c6e46c00c6ac4",
+ "notas": "Asistencias: nueva pestaña para marcar quién vino, quién faltó y quién avisó en cada clase",
  "base": "1.6.0"
 }
