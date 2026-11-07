@@ -93,6 +93,32 @@ button{font:inherit;color:inherit;cursor:pointer}
 .dots i.c.tu{border-radius:2px;border-color:var(--accent)}
 .wk-ev.tu{border-style:dashed}
 .ftabs{display:flex;gap:6px;flex-wrap:wrap}
+.asb{display:inline-flex;gap:4px;flex:none}
+.asb button{border:2px solid var(--line2);background:none;color:var(--muted);border-radius:999px;padding:5px 9px;font-family:var(--f-cond);font-weight:700;font-size:12.5px;letter-spacing:.06em;text-transform:uppercase;min-height:34px}
+.asb button[disabled]{opacity:.45}
+.asb button.on.vino{background:var(--paid);border-color:var(--paid);color:#0B0B12}
+.asb button.on.falto{background:var(--late);border-color:var(--late);color:#fff}
+.asb button.on.aviso{background:var(--pend);border-color:var(--pend);color:#0B0B12}
+.asrow{display:flex;align-items:center;gap:10px;padding:11px 14px;border-top:1px solid var(--grid)}
+.asrow:first-child{border-top:0}
+.asrow .q{flex:1;min-width:0;border:0;background:none;text-align:left;padding:0;color:inherit}
+.asrow .q .t{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.asrow .q .s{font-size:12.5px;color:var(--muted)}
+.ashead{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--head);border-top:1px solid var(--grid)}
+.ashead:first-child{border-top:0}
+.ashead .h{font-family:var(--f-num);font-weight:700;color:var(--paid);flex:none}
+.asweek{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.asweek button{border:1px solid var(--grid);background:var(--sheet);color:var(--ink);border-radius:10px;padding:6px 0 7px;display:flex;flex-direction:column;align-items:center;gap:2px;font-family:var(--f-cond);font-weight:700}
+.asweek button small{font-size:11px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase}
+.asweek button b{font-size:17px}
+.asweek button i{width:6px;height:6px;border-radius:50%;background:transparent}
+.asweek button i.falta{background:var(--pend)} .asweek button i.ok{background:var(--paid)}
+.asweek button[aria-current="date"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.asstats{display:grid;grid-template-columns:repeat(4,1fr);background:var(--sheet);border:1px solid var(--grid);border-radius:12px;overflow:hidden}
+.asstats>div{padding:10px 6px;text-align:center;border-left:1px solid var(--grid)}
+.asstats>div:first-child{border-left:0}
+.asstats b{display:block;font-family:var(--f-display);font-size:24px;font-weight:400}
+.asstats span{font-family:var(--f-cond);font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:700}
 .clw{display:flex;flex-direction:column;gap:6px;padding:8px 0;border-bottom:1px dashed var(--line2)}.clw .clrep{width:auto;align-self:flex-start;font-size:14px;padding:6px 10px}
 .clrow{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr) 40px;gap:8px;align-items:end}
 .clrow .x{height:42px;border:2px solid var(--line2);border-radius:8px;background:none;color:var(--muted);font-size:16px}
@@ -247,8 +273,9 @@ nav.tabs svg{display:none;width:22px;height:22px;fill:none;stroke:currentColor;s
   .strip .v{font-size:16px}
   .field input,.field select,.search,.grid input,.grid select{font-size:16px}
   nav.tabs{padding-left:max(4px,env(safe-area-inset-left,0px));padding-right:max(4px,env(safe-area-inset-right,0px))}
-  nav.tabs .in{display:grid;grid-template-columns:repeat(5,1fr);gap:0;overflow:visible}
-  nav.tabs button{border-right:0;display:flex;flex-direction:column;align-items:center;gap:3px;padding:9px 2px 8px;font-size:11px;letter-spacing:.08em}
+  nav.tabs .in{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:0;overflow:visible}
+  nav.tabs button{border-right:0;display:flex;flex-direction:column;align-items:center;gap:3px;padding:9px 0 8px;font-size:10.5px;letter-spacing:0;min-width:0}
+  nav.tabs button span{max-width:100%;overflow:hidden;text-overflow:ellipsis}
   nav.tabs svg{display:block}
   nav.tabs button[aria-current="page"]{background:none}
   .fab{display:grid;place-items:center;position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(76px + env(safe-area-inset-bottom,0px));width:58px;height:58px;border-radius:50%;border:0;background:var(--accent);color:#fff;z-index:11;box-shadow:0 6px 20px rgba(214,30,141,.45)}
@@ -289,6 +316,7 @@ nav.tabs svg{display:none;width:22px;height:22px;fill:none;stroke:currentColor;s
 <nav class="tabs" aria-label="Hojas"><div class="in">
   <button data-tab="cal" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span>Calendario</span></button>
   <button data-tab="alumnos"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5M16 4.8a3.5 3.5 0 0 1 0 6.4M18.5 14.8c1.6.8 2.7 2.5 3 5.2"/></svg><span>Alumnos</span></button>
+  <button data-tab="asist"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3.5" width="16" height="18" rx="2"/><path d="M8.5 9.5l1.6 1.6 3-3.2M8.5 15.5l1.6 1.6 3-3.2M15.5 10h1.5M15.5 16h1.5"/></svg><span>Asistencias</span></button>
   <button data-tab="cobros"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="6" width="19" height="12" rx="2"/><circle cx="12" cy="12" r="2.6"/><path d="M6 9.5v5M18 9.5v5"/></svg><span>Cobros</span></button>
   <button data-tab="gastos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg><span>Gastos</span></button>
   <button data-tab="resumen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V11M10 20V5M16 20v-6M21 20H3"/></svg><span>Resumen</span></button>
@@ -319,13 +347,13 @@ const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&g
 const uid=()=>Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-4);
 const toNum=v=>{const n=parseFloat(String(v).replace(/\./g,"").replace(",","."));return isFinite(n)?n:0};
 
-let alumnos=[],pagos={},gastos=[],liquidaciones=[],turnos=[],config={};
+let alumnos=[],pagos={},gastos=[],liquidaciones=[],turnos=[],config={},asistencias={};
 let cols=null,loaded=false;
 let tab="cal",selDay=null,buscar="",verInactivos=false,pendingRender=false;
 let cur=(()=>{const t=today();return {y:t.getFullYear(),m:t.getMonth()}})();
 
 /* ---------- guardar ---------- */
-function lsSave(){if(cols)return;try{localStorage.setItem(LS,JSON.stringify({alumnos,pagos,gastos,liquidaciones,turnos,config}))}catch(e){}}
+function lsSave(){if(cols)return;try{localStorage.setItem(LS,JSON.stringify({alumnos,pagos,gastos,liquidaciones,turnos,config,asistencias}))}catch(e){}}
 async function put(col,id,data){
   if(col==="alumnos"){const i=alumnos.findIndex(x=>x.id===id);const v={id,...data};i>=0?alumnos[i]=v:alumnos.push(v)}
   if(col==="pagos")pagos[id]={id,...data};
@@ -333,6 +361,7 @@ async function put(col,id,data){
   if(col==="liquidaciones"){const i=liquidaciones.findIndex(x=>x.id===id);const v={id,...data};i>=0?liquidaciones[i]=v:liquidaciones.push(v)}
   if(col==="turnos"){const i=turnos.findIndex(x=>x.id===id);const v={id,...data};i>=0?turnos[i]=v:turnos.push(v)}
   if(col==="config")config[id]={...data};
+  if(col==="asistencias")asistencias[id]={id,...data};
   safeRender();
   if(cols){try{const {id:_,...rest}=data;await cols[col].doc(id).set(rest)}catch(e){toast("No se pudo guardar. Revisá la conexión.")}}else lsSave();
 }
@@ -343,6 +372,7 @@ async function del(col,id){
   if(col==="liquidaciones")liquidaciones=liquidaciones.filter(x=>x.id!==id);
   if(col==="turnos")turnos=turnos.filter(x=>x.id!==id);
   if(col==="config")delete config[id];
+  if(col==="asistencias")delete asistencias[id];
   safeRender();
   if(cols){try{await cols[col].doc(id).delete()}catch(e){toast("No se pudo borrar.")}}else lsSave();
 }
@@ -908,11 +938,11 @@ function liquidacionPanel(l){
     put("liquidaciones",nuevo?uid():l.id,{mes:$("#lMes").value||mk(y,m),monto:mo,fecha:$("#lF").value||iso(today()),nota:$("#lN").value.trim(),por:yo.id});closePanel();toast("Pago registrado")};
   if(!nuevo)$("#lDel").onclick=()=>{del("liquidaciones",l.id);closePanel();toast("Pago borrado")};
 }
-const PERMISOS_TXT=[["editarAlumnos","Cargar y editar alumnos y horarios (sin ver cuotas)"],["bajasAlumnos","Dar de baja alumnos"],["verCobros","Ver quién pagó y quién no (sin montos)"],["verMontos","Ver cuotas y montos cobrados"],["registrarCobros","Registrar cobros de alumnos"],["cargarGastos","Cargar gastos"]];
+const PERMISOS_TXT=[["editarAlumnos","Cargar y editar alumnos y horarios (sin ver cuotas)"],["bajasAlumnos","Dar de baja alumnos"],["verCobros","Ver quién pagó y quién no (sin montos)"],["verMontos","Ver cuotas y montos cobrados"],["registrarCobros","Registrar cobros de alumnos"],["cargarGastos","Cargar gastos"],["asistencias","Tomar asistencia de las clases"]];
 function adminCuentaHTML(){return ""}
 function adminCuentaBind(){}
 function panelPermisos(){
-  const p=Object.assign({verCobros:false,verMontos:false,registrarCobros:false,editarAlumnos:true,bajasAlumnos:true,verGastos:"marcados",cargarGastos:true},config.permisos||{}),g=parteGeneral();
+  const p=Object.assign({verCobros:false,verMontos:false,registrarCobros:false,editarAlumnos:true,bajasAlumnos:true,verGastos:"marcados",cargarGastos:true,asistencias:true},config.permisos||{}),g=parteGeneral();
   panel(`<h2 style="font-size:24px">${esc(nombreAdmin())}</h2>
     ${adminCuentaHTML()}
     <div class="lbl">Pago general por alumno</div>
@@ -1012,6 +1042,121 @@ function vResumen(){
   </div>`;
 }
 
+/* ---------- asistencias ---------- */
+// Una marca por alumno y por clase: vino, faltó o avisó que faltaba. Se guarda en la colección "asistencias".
+const AS_EST={vino:"Vino",falto:"Faltó",aviso:"Avisó"};
+let asVista="dia",asFecha="",asAlumno="",asItems={},asGrupos=[];
+const marcaAsist=()=>esDueno()||puede("asistencias");
+const kAs=(aId,f,c)=>aId+"_"+f+"_"+String(c.id||c.h||"").replace(/[^a-zA-Z0-9]/g,"");
+const kAsT=t=>"t_"+t.id;
+const asDe=k=>asistencias[k];
+const estAs=k=>(asistencias[k]||{}).estado||"";
+const fechaAs=f=>{const D=parse(f);return DIAS[(D.getDay()+6)%7]+" "+D.getDate()+"/"+(D.getMonth()+1)};
+// Clases de un día: individuales, ensambles (una marca por integrante) y turnos sueltos.
+function itemsAsist(D){
+  const y=D.getFullYear(),m=D.getMonth(),wd=(D.getDay()+6)%7+1,f=iso(D),out=[],grupos={};
+  for(const a of alumnos){if(!activoEn(a,y,m))continue;for(const c of clasesDe(a))if(enDia(c,D,wd)){
+    const it={k:kAs(a.id,f,c),a,f,h:c.h,hf:c.hf,clase:c.id||"",sub:a.curso||""};
+    if(GRUPALES.includes(a.curso)){const g=grupoDe(a),gk=[a.curso,c.h,c.hf,g].join("|");(grupos[gk]=grupos[gk]||{grupo:true,curso:a.curso,g,h:c.h,hf:c.hf,miembros:[]}).miembros.push(it)}
+    else out.push(it)}}
+  for(const t of turnosFecha(D)){const a=alDeT(t);out.push({k:kAsT(t),a,f,h:t.h||"",hf:hfT(t),turno:t,sub:tipoT(t)+(t.detalle?" · "+t.detalle:"")})}
+  for(const g of Object.values(grupos)){g.miembros.sort((p,q)=>p.a.nombre.localeCompare(q.a.nombre));out.push(g)}
+  const nom=x=>x.grupo?(x.g||x.curso):x.a.nombre;
+  return out.sort((p,q)=>aMin(p.h)-aMin(q.h)||nom(p).localeCompare(nom(q)));
+}
+const planoAs=items=>items.flatMap(x=>x.grupo?x.miembros:[x]);
+// Clases de un alumno en un mes, más las marcas viejas de clases que ya no están en su horario.
+function ocurrAlumno(a,y,m){
+  const out=[],k=mk(y,m),vistos=new Set();
+  if(activoEn(a,y,m))for(let d=1;d<=lastDay(y,m);d++){const D=new Date(y,m,d),wd=(D.getDay()+6)%7+1,f=iso(D);
+    for(const c of clasesDe(a))if(enDia(c,D,wd))out.push({k:kAs(a.id,f,c),a,f,h:c.h,hf:c.hf,clase:c.id||"",sub:(a.curso||"")+(GRUPALES.includes(a.curso)&&grupoDe(a)?" · "+grupoDe(a):"")})}
+  for(const t of turnos)if(t.alumnoId===a.id&&String(t.fecha||"").startsWith(k))out.push({k:kAsT(t),a,f:t.fecha,h:t.h||"",hf:hfT(t),turno:t,sub:tipoT(t)});
+  out.forEach(x=>vistos.add(x.k));
+  for(const r of Object.values(asistencias))if(r.alumnoId===a.id&&String(r.fecha||"").startsWith(k)&&!vistos.has(r.id))out.push({k:r.id,a,f:r.fecha,h:r.h||"",hf:r.hf||"",clase:r.clase||"",turno:r.turnoId?{id:r.turnoId}:null,sub:"Ya no está en el horario"});
+  return out.sort((p,q)=>p.f.localeCompare(q.f)||aMin(p.h)-aMin(q.h));
+}
+function cuentaAs(lista){
+  const hoy=iso(today()),c={vino:0,falto:0,aviso:0,sin:0,dadas:0};
+  for(const it of lista){const e=estAs(it.k);if(e)c[e]++;else if(it.f<=hoy)c.sin++;if(it.f<=hoy||e)c.dadas++}
+  const marc=c.vino+c.falto+c.aviso;c.pct=marc?Math.round(c.vino*100/marc):null;
+  return c;
+}
+function datosAs(it,estado){return {alumnoId:it.a.id,fecha:it.f,h:it.h||"",hf:it.hf||"",clase:it.clase||"",turnoId:it.turno?it.turno.id:"",estado,por:yo.id}}
+function marcarAs(it,estado){
+  if(!marcaAsist()){toast("No tenés permiso para tomar asistencia.");return}
+  if(estAs(it.k)===estado){del("asistencias",it.k);return}
+  put("asistencias",it.k,datosAs(it,estado));
+}
+function marcarVinieron(lista){
+  if(!marcaAsist())return;
+  const sin=lista.filter(it=>!estAs(it.k));
+  sin.forEach(it=>put("asistencias",it.k,datosAs(it,"vino")));
+  toast(sin.length?(sin.length===1?"1 marcado como presente":sin.length+" marcados como presentes"):"Ya estaban todos marcados");
+}
+function asBtns(it){
+  asItems[it.k]=it;
+  const e=estAs(it.k),dis=marcaAsist()?"":"disabled";
+  return `<div class="asb" role="group" aria-label="Asistencia de ${esc(it.a.nombre)}">${[["vino","Vino"],["falto","Faltó"],["aviso","Avisó"]].map(([v,t])=>`<button type="button" class="${v}${e===v?" on":""}" data-as="${it.k}|${v}" aria-pressed="${e===v}" ${v==="aviso"?'title="Faltó, pero avisó antes"':""} ${dis}>${t}</button>`).join("")}</div>`;
+}
+const asRow=(it,lado)=>`<div class="asrow"><button class="q" data-asal="${it.a.id}"><div class="t">${esc(lado||it.a.nombre)}</div>${it.h||it.sub?`<div class="s">${esc((it.h?it.h+"–"+it.hf:"")+(it.h&&it.sub?" · ":"")+(it.sub||""))}</div>`:""}</button>${asBtns(it)}</div>`;
+const asStats=c=>`<div class="asstats"><div><b style="color:var(--paid)">${c.vino}</b><span>Vino</span></div><div><b style="color:var(--late)">${c.falto}</b><span>Faltó</span></div><div><b style="color:var(--pend)">${c.aviso}</b><span>Avisó</span></div><div><b>${c.sin}</b><span>Sin marcar</span></div></div>`;
+function asSeg(){return `<div class="toolbar"><div class="seg" role="tablist" aria-label="Asistencias"><button type="button" data-asvista="dia" aria-pressed="${asVista==="dia"}">Por día</button><button type="button" data-asvista="alumno" aria-pressed="${asVista==="alumno"}">Por alumno</button></div></div>
+  ${marcaAsist()?"":`<div class="alert info"><p>Podés ver las asistencias, pero el dueño todavía no te dio permiso para marcarlas.</p></div>`}`}
+function diaAs(){
+  const t=today();
+  if(asFecha&&asFecha.slice(0,7)===mk(cur.y,cur.m))return parse(asFecha);
+  return (t.getFullYear()===cur.y&&t.getMonth()===cur.m)?t:new Date(cur.y,cur.m,1);
+}
+function vAsistDia(){
+  const D=diaAs(),f=iso(D),hoy=iso(today()),items=itemsAsist(D),pl=planoAs(items),c=cuentaAs(pl),lun=lunesDe(D);
+  asGrupos=[];
+  const semana=[0,1,2,3,4,5,6].map(i=>{const d=addD(lun,i),fd=iso(d),p=planoAs(itemsAsist(d)),falta=fd<=hoy&&p.some(it=>!estAs(it.k)),ok=p.length&&p.every(it=>estAs(it.k));
+    return `<button type="button" data-asfecha="${fd}" ${fd===f?'aria-current="date"':""} aria-label="${esc(d.toLocaleDateString("es-AR",{weekday:"long",day:"numeric"}))}${p.length?", "+p.length+" clases":""}"><small>${DIAS[i]}</small><b>${d.getDate()}</b><i class="${falta?"falta":ok?"ok":""}"></i></button>`}).join("");
+  const lista=items.map(x=>{
+    if(!x.grupo)return `<div class="mlist" style="border-radius:12px">${asRow(x)}</div>`;
+    const gi=asGrupos.push(x.miembros)-1;
+    return `<div class="mlist"><div class="ashead"><span class="h">${esc(x.h)}–${esc(x.hf)}</span><div style="flex:1;min-width:0"><div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(x.g||x.curso)}</div><div class="muted" style="font-size:12.5px">${x.miembros.length} ${x.miembros.length===1?"integrante":"integrantes"}</div></div>${marcaAsist()&&x.miembros.some(it=>!estAs(it.k))?`<button class="btn sm ghost" data-asg="${gi}" title="Marcar a todos como presentes">✓ Todos</button>`:""}</div>${x.miembros.map(it=>asRow({...it,h:"",sub:""})).join("")}</div>`;
+  }).join("");
+  return `<div style="display:flex;flex-direction:column;gap:12px">
+    ${asSeg()}
+    <div class="toolbar"><button class="btn sm ghost" data-asnav="-1" aria-label="Día anterior">‹</button><h2 style="font-size:19px;flex:1;text-align:center">${esc((s=>s.charAt(0).toUpperCase()+s.slice(1))(D.toLocaleDateString("es-AR",{weekday:"long",day:"numeric",month:"long"})))}</h2><button class="btn sm ghost" data-asnav="1" aria-label="Día siguiente">›</button></div>
+    <div class="asweek">${semana}</div>
+    ${f!==hoy?`<button class="btn sm ghost" data-asfecha="${hoy}" style="align-self:center">Ir a hoy</button>`:""}
+    ${pl.length?asStats(c):""}
+    ${marcaAsist()&&f<=hoy&&c.sin>1?`<button class="btn" id="asTodos" style="align-self:flex-start;white-space:normal;text-align:left">Marcar los ${c.sin} que faltan como "Vino"</button>`:""}
+    ${lista||`<div class="empty">No hay clases ni turnos este día.</div>`}
+    ${pl.length?`<p class="foot" style="margin:0">Tocá <b>Vino</b>, <b>Faltó</b> o <b>Avisó</b> (faltó pero avisó antes). Tocá de nuevo para borrar la marca. Tocá el nombre para ver todas sus asistencias.</p>`:""}
+  </div>`;
+}
+function vAsistAlumno(){
+  const {y,m}=cur,mesTxt=new Date(y,m,1).toLocaleDateString("es-AR",{month:"long",year:"numeric"});
+  const conMarcas=new Set(Object.values(asistencias).filter(r=>String(r.fecha||"").startsWith(mk(y,m))).map(r=>r.alumnoId));
+  const lista=alumnos.filter(a=>activoEn(a,y,m)||conMarcas.has(a.id)).sort((p,q)=>p.nombre.localeCompare(q.nombre));
+  const a=alumnos.find(x=>x.id===asAlumno);
+  const sel=`<div class="field"><label for="asSel">Alumno</label><select id="asSel"><option value="">Todos los alumnos</option>${lista.concat(a&&!lista.includes(a)?[a]:[]).map(x=>`<option value="${x.id}" ${x.id===asAlumno?"selected":""}>${esc(x.nombre)}</option>`).join("")}</select></div>`;
+  if(!a){
+    const filas=lista.map(x=>{const oc=ocurrAlumno(x,y,m),c=cuentaAs(oc);return {x,oc,c}}).filter(r=>r.oc.length);
+    return `<div style="display:flex;flex-direction:column;gap:12px">${asSeg()}${sel}
+      <div class="sheetbox"><div style="padding:12px 14px"><h2>Asistencia por alumno</h2><div class="by">${esc(mesTxt)}</div></div>
+      <div class="mlist" style="border:0;border-radius:0">${filas.map(({x,c})=>`<button class="mrow" data-asal="${x.id}"><span class="av">${esc(inicial(x.nombre))}</span><span style="min-width:0"><div class="t">${esc(x.nombre)}</div><div class="s">${c.vino} vino · ${c.falto} faltó · ${c.aviso} avisó${c.sin?` · <span style="color:var(--pend)">${c.sin} sin marcar</span>`:""}</div></span><span class="num" style="font-family:var(--f-display);font-size:20px;color:${c.pct===null?"var(--muted)":c.pct>=75?"var(--paid)":c.pct>=50?"var(--pend)":"var(--late)"}">${c.pct===null?"—":c.pct+"%"}</span></button>`).join("")||`<div class="empty">No hay clases en este mes.</div>`}</div></div>
+      <p class="foot" style="margin:0">El porcentaje cuenta las clases marcadas: cuántas vino sobre el total (las que avisó cuentan como falta).</p></div>`;
+  }
+  const oc=ocurrAlumno(a,y,m),c=cuentaAs(oc),hoy=iso(today());
+  const pasadas=oc.filter(it=>it.f<=hoy).reverse(),prox=oc.filter(it=>it.f>hoy);
+  const fila=it=>asRow(it,fechaAs(it.f));
+  return `<div style="display:flex;flex-direction:column;gap:12px">${asSeg()}${sel}
+    <div class="toolbar"><div><div class="lbl">${esc(mesTxt)}</div><h2 style="font-size:22px">${esc(a.nombre)}</h2><div class="muted">${esc(a.curso||"")}${horarioTxt(a)?" · "+esc(horarioTxt(a)):""}</div></div>
+      <div style="text-align:right"><div style="font-family:var(--f-display);font-size:30px;color:${c.pct===null?"var(--muted)":c.pct>=75?"var(--paid)":c.pct>=50?"var(--pend)":"var(--late)"}">${c.pct===null?"—":c.pct+"%"}</div><div class="foot">asistencia</div></div></div>
+    ${asStats(c)}
+    ${marcaAsist()&&c.sin>1?`<button class="btn" id="asTodosAl" style="align-self:flex-start;white-space:normal;text-align:left">Marcar las ${c.sin} sin marcar como "Vino"</button>`:""}
+    <div class="lbl">Clases dadas</div>${pasadas.length?`<div class="mlist">${pasadas.map(fila).join("")}</div>`:`<div class="empty" style="padding:10px">Todavía no tuvo clases este mes.</div>`}
+    ${prox.length?`<div class="lbl">Próximas</div><div class="mlist">${prox.map(fila).join("")}</div><p class="foot" style="margin:0">Si ya sabés que va a faltar, marcá <b>Avisó</b> desde ahora.</p>`:""}
+    <button class="btn sm ghost" data-edit-al="${a.id}" style="align-self:flex-start">Ver ficha del alumno</button>
+  </div>`;
+}
+function vAsist(){asItems={};return `<div style="max-width:760px;margin:0 auto">${asVista==="alumno"?vAsistAlumno():vAsistDia()}</div>`}
+function asistAlumnoTxt(a){const t=today(),c=cuentaAs(ocurrAlumno(a,t.getFullYear(),t.getMonth()));return c.pct===null?"Asistencias":`Asistencias · ${c.pct}% este mes`}
+
 /* ---------- render ---------- */
 function safeRender(){const a=document.activeElement;if(a&&a.closest&&a.closest("table.grid")&&(a.tagName==="INPUT"||a.tagName==="SELECT")){pendingRender=true;return}render()}
 function render(){
@@ -1019,16 +1164,16 @@ function render(){
   const t=today();
   $("#hoyTxt").textContent=t.toLocaleDateString("es-AR",{weekday:"long",day:"numeric",month:"long"});
   $("#mLabel").textContent=new Date(cur.y,cur.m,1).toLocaleDateString("es-AR",{month:"long",year:"numeric"});
-  const visibles={cal:true,alumnos:true,cobros:puede("verCobros"),gastos:esDueno()||puede("cargarGastos")||(typeof permisoGastos==="function"&&permisoGastos()!=="ninguno"),resumen:true};
+  const visibles={cal:true,alumnos:true,asist:true,cobros:puede("verCobros"),gastos:esDueno()||puede("cargarGastos")||(typeof permisoGastos==="function"&&permisoGastos()!=="ninguno"),resumen:true};
   if(!visibles[tab])tab="cal";
   document.querySelectorAll("nav.tabs [data-tab]").forEach(b=>{b.hidden=!visibles[b.dataset.tab];b.setAttribute("aria-current",b.dataset.tab===tab?"page":"false")});
   const rl=document.querySelector('nav.tabs [data-tab="resumen"] span');if(rl)rl.textContent=esDueno()?"Resumen":"Mis pagos";
   const puedeAgregar=esDueno()||puede("editarAlumnos");const aa=$("#addAlumno");if(aa)aa.hidden=!puedeAgregar;
-  const fb=$("#fab");if(fb)fb.hidden=tab==="resumen"||tab==="cobros"||(tab==="gastos"?!(esDueno()||puede("cargarGastos")):!puedeAgregar);
+  const fb=$("#fab");if(fb)fb.hidden=tab==="resumen"||tab==="cobros"||tab==="asist"||(tab==="gastos"?!(esDueno()||puede("cargarGastos")):!puedeAgregar);
   const v=$("#view");
   if(!loaded){v.innerHTML=`<div class="empty">Cargando…</div>`;return}
   if(!alumnos.length&&tab==="cal"){v.innerHTML=`<div class="card" style="align-items:flex-start"><h2>Todavía no hay alumnos</h2><p class="muted" style="margin:0">${esDueno()||puede("editarAlumnos")?"Agregá el primero con sus días y horarios de clase. Las clases aparecen en el calendario todas las semanas.":"Cuando el dueño cargue alumnos, vas a ver sus clases acá."}</p>${esDueno()||puede("editarAlumnos")?`<button class="btn" data-go="alumnos">Cargar alumnos</button>`:""}</div>`}
-  else v.innerHTML=tab==="cal"?vCal():tab==="alumnos"?vAlumnos():tab==="cobros"?vCobros():tab==="gastos"?vGastos():vResumen();
+  else v.innerHTML=tab==="cal"?vCal():tab==="alumnos"?vAlumnos():tab==="asist"?vAsist():tab==="cobros"?vCobros():tab==="gastos"?vGastos():vResumen();
   pintarUsuario();$("#foot").textContent=cols?"Guardado en tu cuenta: lo ves igual en el celular y en la compu.":"Guardado solo en este dispositivo.";
 }
 
@@ -1119,6 +1264,7 @@ function alumnoPanel(a,pre,vista){
   const tl=nuevo?[]:turnosDe(a),hoyF=iso(today()),prox=tl.filter(t=>t.fecha>=hoyF).reverse(),pasados=tl.filter(t=>t.fecha<hoyF);
   const debe=tl.filter(t=>tAparte(t)&&!t.pago);
   const solapa=nuevo?"":`<div class="seg" role="tablist" aria-label="Ficha" style="align-self:flex-start"><button type="button" data-ftab="fi" aria-pressed="${vista!=="turnos"}">Ficha</button><button type="button" data-ftab="tu" aria-pressed="${vista==="turnos"}">Turnos y extras${tl.length?" ("+tl.length+")":""}</button></div>
+    <button type="button" class="btn sm ghost" data-asver="${a.id}" style="align-self:flex-start">${esc(asistAlumnoTxt(a))}</button>
     <div id="fTu" style="display:${vista==="turnos"?"flex":"none"};flex-direction:column;gap:12px">
       ${edita?`<button class="btn" data-nuevoturno="${hoyF}" data-al="${a.id}" style="align-self:flex-start">+ Agendar turno o extra</button>`:""}
       <p class="foot" style="margin:0">Clase extra, grabación, producción, sesión de video… Cada turno aparece en el calendario y, si se cobra aparte, tiene su propio pago, separado de la cuota.</p>
@@ -1295,6 +1441,15 @@ document.addEventListener("click",ev=>{
   const T=ev.target;
   const tb=T.closest("nav.tabs [data-tab]");if(tb){tab=tb.dataset.tab;render();scrollTo(0,0);return}
   const go=T.closest("[data-go]");if(go){tab=go.dataset.go;render();return}
+  const asb=T.closest("[data-as]");if(asb){ev.stopPropagation();const [k,e]=asb.dataset.as.split("|"),it=asItems[k];if(it)marcarAs(it,e);return}
+  const asf=T.closest("[data-asfecha]");if(asf){asFecha=asf.dataset.asfecha;const D=parse(asFecha);cur={y:D.getFullYear(),m:D.getMonth()};render();return}
+  const asn=T.closest("[data-asnav]");if(asn){const D=addD(diaAs(),+asn.dataset.asnav);asFecha=iso(D);cur={y:D.getFullYear(),m:D.getMonth()};render();return}
+  const asv=T.closest("[data-asvista]");if(asv){asVista=asv.dataset.asvista;render();return}
+  const asal=T.closest("[data-asal]");if(asal){ev.stopPropagation();tab="asist";asVista="alumno";asAlumno=asal.dataset.asal;render();scrollTo(0,0);return}
+  const asver=T.closest("[data-asver]");if(asver){closePanel();const t=today();cur={y:t.getFullYear(),m:t.getMonth()};tab="asist";asVista="alumno";asAlumno=asver.dataset.asver;render();scrollTo(0,0);return}
+  const asg=T.closest("[data-asg]");if(asg){marcarVinieron(asGrupos[+asg.dataset.asg]||[]);return}
+  if(T.id==="asTodos"){marcarVinieron(planoAs(itemsAsist(diaAs())));return}
+  if(T.id==="asTodosAl"){const a=alumnos.find(x=>x.id===asAlumno);if(a)marcarVinieron(ocurrAlumno(a,cur.y,cur.m).filter(it=>it.f<=iso(today())));return}
   const cu=T.closest("[data-cuota]");if(cu){ev.stopPropagation();abrirCuota(cu.dataset.cuota,cu.dataset.ym);return}
   const gr=T.closest("[data-grupo]");if(gr){const [c,wd,h,hf,g,f]=gr.dataset.grupo.split("|");verGrupo(c,+wd,h,hf,g||"",f||"");return}
   const ge=T.closest("[data-gev]");if(ge){verEventoExterno(ge.dataset.gev);return}
@@ -1330,6 +1485,7 @@ document.addEventListener("keydown",ev=>{
 document.addEventListener("change",ev=>{
   const T=ev.target;
   if(T.id==="verInac"){verInactivos=T.checked;render();return}
+  if(T.id==="asSel"){asAlumno=T.value;render();return}
   const tr=T.closest("tr[data-id]");
   if(tr&&T.dataset.f){const a=alumnos.find(x=>x.id===tr.dataset.id);if(!a)return;let v=T.value;
     if(T.dataset.f==="cuota")v=toNum(v);if(T.dataset.f==="diaPago")v=Math.min(31,Math.max(1,parseInt(v)||1));if(T.dataset.f==="nombre"&&!v.trim()){T.value=a.nombre;return}
@@ -1350,7 +1506,7 @@ $("#prevM").onclick=()=>{const d=new Date(cur.y,cur.m-1,1);cur={y:d.getFullYear(
 $("#nextM").onclick=()=>{const d=new Date(cur.y,cur.m+1,1);cur={y:d.getFullYear(),m:d.getMonth()};selDay=null;calAnchor=null;render()};
 
 /* ---------- arranque ---------- */
-function local(){try{const r=JSON.parse(localStorage.getItem(LS)||"null");if(r){alumnos=r.alumnos||[];pagos=r.pagos||{};gastos=r.gastos||[];liquidaciones=r.liquidaciones||[];turnos=r.turnos||[];config=r.config||{}}}catch(e){}loaded=true;render()}
+function local(){try{const r=JSON.parse(localStorage.getItem(LS)||"null");if(r){alumnos=r.alumnos||[];pagos=r.pagos||{};gastos=r.gastos||[];liquidaciones=r.liquidaciones||[];turnos=r.turnos||[];config=r.config||{};asistencias=r.asistencias||{}}}catch(e){}loaded=true;render()}
 render();
 let fb=setTimeout(()=>{if(!loaded)local()},4000);
 (async()=>{
@@ -1360,10 +1516,11 @@ let fb=setTimeout(()=>{if(!loaded)local()},4000);
   let db=null;try{db=await c.use("db")}catch(e){}
   if(!db){clearTimeout(fb);if(!loaded)local();return}
   clearTimeout(fb);
-  cols={alumnos:db.collection("alumnos"),pagos:db.collection("pagos"),gastos:db.collection("gastos"),liquidaciones:db.collection("liquidaciones"),turnos:db.collection("turnos"),config:db.collection("config")};
+  cols={alumnos:db.collection("alumnos"),pagos:db.collection("pagos"),gastos:db.collection("gastos"),liquidaciones:db.collection("liquidaciones"),turnos:db.collection("turnos"),config:db.collection("config"),asistencias:db.collection("asistencias")};
   const got={alumnos:false,pagos:false,gastos:false};
   cols.liquidaciones.onSnapshot(s=>{liquidaciones=s.docs.map(d=>({id:d.id,...d.data()}));safeRender()},()=>{});
   cols.turnos.onSnapshot(s=>{turnos=s.docs.map(d=>({id:d.id,...d.data()}));safeRender()},()=>{});
+  cols.asistencias.onSnapshot(s=>{asistencias={};s.docs.forEach(d=>asistencias[d.id]={id:d.id,...d.data()});safeRender()},()=>{});
   cols.config.onSnapshot(s=>{config={};s.docs.forEach(d=>config[d.id]={...d.data()});safeRender()},()=>{});
   const done=k=>{got[k]=true;if(got.alumnos&&got.pagos&&got.gastos)loaded=true;resolverNombres();safeRender()};
   const fail=()=>toast("Sin conexión con tu cuenta. Revisá internet y recargá.");

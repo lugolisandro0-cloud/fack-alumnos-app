@@ -1,6 +1,6 @@
 /* ---------- arranque ---------- */
 (function iniciar(){
-  try{const r=JSON.parse(localStorage.getItem(LS)||"null");if(r){alumnos=r.alumnos||[];pagos=r.pagos||{};gastos=r.gastos||[];liquidaciones=r.liquidaciones||[];turnos=r.turnos||[];config=r.config||{}}}catch(e){}
+  try{const r=JSON.parse(localStorage.getItem(LS)||"null");if(r){alumnos=r.alumnos||[];pagos=r.pagos||{};gastos=r.gastos||[];liquidaciones=r.liquidaciones||[];turnos=r.turnos||[];config=r.config||{};asistencias=r.asistencias||{}}}catch(e){}
   loaded=true;render();
   try{actualizacion.arranqueOk()}catch(e){}
   setTimeout(()=>actualizacion.revisar(false),4000);
