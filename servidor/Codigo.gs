@@ -9,7 +9,7 @@
  */
 
 // ===== Ajustes =====
-const VERSION_SERVIDOR = "1.7.0";
+const VERSION_SERVIDOR = "1.8.0";
 const COMPARTIR_CON = (typeof AJUSTES !== "undefined" && AJUSTES && AJUSTES.COMPARTIR_CON) || ""; // mail del administrador para compartirle el calendario (opcional)
 const NOMBRE_CALENDARIO = "FACK Music · Clases";
 const TZ = "America/Argentina/Buenos_Aires";
@@ -19,10 +19,10 @@ function grupoDe(a) { return String((a && a.grupo) || "").replace(/\|/g, "/").tr
 function claveGrupo(a, c) { const k = ["g", a.curso, c.d, c.h, c.hf]; const g = grupoDe(a); if (g || c.f) k.push(g); if (c.f) k.push(c.f); return k.join("|"); }
 // Colores de Google Calendar (1 lavanda, 2 salvia, 3 uva, 4 flamenco, 5 banana, 6 mandarina, 7 pavo real, 8 grafito, 9 arándano, 10 albahaca, 11 tomate)
 const COLOR_CURSO = { "Canto": "4", "Guitarra": "7", "Piano": "3", "Batería": "6", "Bajo": "2", "Producción": "5", "Mezcla": "10", "Ensambles": "9", "Mentoría": "1", "Otro": "8" };
-const COLECCIONES = ["alumnos", "pagos", "gastos", "liquidaciones", "turnos", "config"];
+const COLECCIONES = ["alumnos", "pagos", "gastos", "liquidaciones", "turnos", "config", "asistencias"];
 // Turnos sueltos (clase extra, grabación, producción, sesión de video...): color en Google Calendar según qué se hace.
 const COLOR_TIPO = { "Clase extra": "7", "Grabación": "4", "Producción": "5", "Mezcla": "10", "Sesión de video": "6", "Ensayo": "9", "Otro": "8" };
-const PERMISOS_BASE = { verCobros: false, verMontos: false, registrarCobros: false, editarAlumnos: true, bajasAlumnos: true, verGastos: "marcados", cargarGastos: true };
+const PERMISOS_BASE = { verCobros: false, verMontos: false, registrarCobros: false, editarAlumnos: true, bajasAlumnos: true, verGastos: "marcados", cargarGastos: true, asistencias: true };
 const PARTE_BASE = { tipo: "pct", valor: 0 };
 
 // Si el dueño se olvida la contraseña: elegí esta función arriba y tocá "Ejecutar".
@@ -339,9 +339,11 @@ function vistaAdmin(f, perm, general) {
     o.aCobrarMoneda = d.moneda || "ARS";
     return o;
   }
+  if (f.col === "asistencias") return d;
   if (f.col === "config") return f.id === "permisos" ? perm : f.id === "cambio" ? d : null;
   return null;
 }
+const ESTADOS_ASIST = ["vino", "falto", "aviso"];
 
 // Cambios que manda el administrador: solo se acepta lo que tiene permitido.
 function cambioDelAdmin(st, c, perm, forzar) {
@@ -399,6 +401,15 @@ function cambioDelAdmin(st, c, perm, forzar) {
     }
     if (nuevo.cobro !== "aparte") nuevo.pago = null;
     if (JSON.stringify(nuevo) !== JSON.stringify(prev)) guardar(st, "turnos", c.id, nuevo, false);
+    return;
+  }
+  if (c.col === "asistencias") {
+    if (!perm.asistencias) return;
+    if (c.deleted) { if (prev) guardar(st, "asistencias", c.id, {}, true); return; }
+    const al = st.idx["alumnos|" + d.alumnoId];
+    if (!al || al.deleted || ESTADOS_ASIST.indexOf(d.estado) < 0 || !/^\d{4}-\d{2}-\d{2}$/.test(String(d.fecha || ""))) return;
+    const nuevo = { alumnoId: d.alumnoId, fecha: d.fecha, h: String(d.h || ""), hf: String(d.hf || ""), clase: String(d.clase || ""), turnoId: String(d.turnoId || ""), estado: d.estado, por: "admin" };
+    if (JSON.stringify(nuevo) !== JSON.stringify(prev)) guardar(st, "asistencias", c.id, nuevo, false);
     return;
   }
   // liquidaciones y config: solo el dueño
@@ -886,6 +897,15 @@ function actualizarHojasLegibles(st) {
     vivos("turnos").sort(function (x, y) { return String(y.fecha).localeCompare(String(x.fecha)); }).map(function (t) {
       const ap = t.cobro === "aparte", p = t.pago || null;
       return [t.fecha || "", t.h || "", t.hf || "", nombres[t.alumnoId] || "(alumno borrado)", t.tipo || "", t.detalle || "", ap ? "Aparte" : "Incluido en la cuota", ap ? (t.monto || 0) : "", ap ? (t.moneda || "ARS") : "", ap ? (p ? "Sí" : "No") : "", p ? p.fecha || "" : "", p ? p.medio || "" : "", ap ? parteTurno(t) : ""];
+    }));
+  const cursos = {};
+  alumnos.forEach(function (a) { cursos[a.id] = (a.curso || "") + (grupoDe(a) ? " · " + grupoDe(a) : ""); });
+  const tiposTurno = {};
+  vivos("turnos").forEach(function (t) { tiposTurno[t.id] = t.tipo || ""; });
+  const TXT_ASIST = { vino: "Vino", falto: "Faltó", aviso: "Faltó con aviso" };
+  escribirHoja("Asistencias", ["Fecha", "Desde", "Hasta", "Alumno", "Clase", "Asistencia", "Marcó"],
+    vivos("asistencias").sort(function (x, y) { return (String(y.fecha) + y.h).localeCompare(String(x.fecha) + x.h); }).map(function (r) {
+      return [r.fecha || "", r.h || "", r.hf || "", nombres[r.alumnoId] || "(alumno borrado)", r.turnoId ? (tiposTurno[r.turnoId] || "Turno") : (cursos[r.alumnoId] || ""), TXT_ASIST[r.estado] || "", nombresUsuarios[r.por] || ""];
     }));
   escribirHoja("Pagos al administrador", ["Mes", "Fecha", "Monto", "Nota"],
     vivos("liquidaciones").sort(function (x, y) { return String(y.fecha).localeCompare(String(x.fecha)); }).map(function (l) {
