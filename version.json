@@ -1,6 +1,6 @@
 {
- "version": "1.9.0",
- "sha256": "c7278b20fdf2ee5af6facc45cf9d95f5533f6fb26f58518fa3b80576e7bd0bd2",
- "notas": "Cambiar de día: mover un ensamble entero, o pasar una clase a otro día solo por una semana",
+ "version": "1.9.1",
+ "sha256": "bccbba79f7c697a500654348322518b44db65d7d003d2cf7a9df13908f4a5088",
+ "notas": "Recordatorios: cada alumno puede mandarle notificaciones a Felipe antes de sus clases y turnos",
  "base": "1.6.0"
 }
