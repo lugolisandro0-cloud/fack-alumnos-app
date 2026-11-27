@@ -9,7 +9,7 @@
  */
 
 // ===== Ajustes =====
-const VERSION_SERVIDOR = "1.9.0";
+const VERSION_SERVIDOR = "1.9.1";
 const COMPARTIR_CON = (typeof AJUSTES !== "undefined" && AJUSTES && AJUSTES.COMPARTIR_CON) || ""; // mail del administrador para compartirle el calendario (opcional)
 const NOMBRE_CALENDARIO = "FACK Music · Clases";
 const TZ = "America/Argentina/Buenos_Aires";
@@ -360,7 +360,7 @@ function cambioDelAdmin(st, c, perm, forzar) {
       return;
     }
     const nuevo = Object.assign({}, prev);
-    if (perm.editarAlumnos) ["nombre", "curso", "grupo", "telefono", "clases", "inicio"].forEach(function (x) { if (x in d) nuevo[x] = d[x]; });
+    if (perm.editarAlumnos) ["nombre", "curso", "grupo", "telefono", "clases", "inicio", "avisar"].forEach(function (x) { if (x in d) nuevo[x] = d[x]; });
     if (perm.bajasAlumnos) ["activo", "fin"].forEach(function (x) { if (x in d) nuevo[x] = d[x]; });
     if (JSON.stringify(nuevo) !== JSON.stringify(prev)) guardar(st, "alumnos", c.id, nuevo, false);
     return;
@@ -571,6 +571,14 @@ function asegurarIds(st) {
 }
 
 // Qué eventos tendría que haber en el calendario según la app.
+// Recordatorios (minutos antes) que pidió el alumno; Google acepta hasta 5.
+function avisosDe(a) {
+  const v = Array.isArray(a && a.avisar) ? a.avisar : [];
+  const o = [];
+  v.forEach(function (n) { n = Math.round(Number(n)); if (n > 0 && n <= 40320 && o.indexOf(n) < 0) o.push(n); });
+  return o.sort(function (x, y) { return y - x; }).slice(0, 5);
+}
+function unirAvisos(listas) { const t = []; listas.forEach(function (l) { t.push.apply(t, l); }); return avisosDe({ avisar: t }); }
 function eventosDeseados(st) {
   const out = {};
   const grupos = {};
@@ -589,7 +597,7 @@ function eventosDeseados(st) {
       } else {
         const k = ["a", f.id, c.id].join("|");
         out[k] = {
-          clave: k, d: c.d, h: c.h, hf: c.hf, f: c.f, inicio: inicio, fin: fin, colorId: COLOR_CURSO[a.curso] || COLOR_CURSO.Otro, cambios: c.cambios,
+          clave: k, d: c.d, h: c.h, hf: c.hf, f: c.f, inicio: inicio, fin: fin, colorId: COLOR_CURSO[a.curso] || COLOR_CURSO.Otro, cambios: c.cambios, avisos: avisosDe(a),
           titulo: a.nombre + (a.curso ? " · " + a.curso : ""),
           descripcion: "Alumno de FACK Music" + (a.telefono ? "\nTeléfono: " + a.telefono : "") + "\n\nEsta clase se sincroniza con la app Alumnos y Cuotas."
         };
@@ -615,13 +623,13 @@ function eventosDeseados(st) {
         const kx = ["x", m.id, m.c.id, de].join("|");
         out[kx] = {
           clave: kx, d: diaSemana(x.a), h: x.h, hf: x.hf, f: x.a, inicio: x.a.slice(0, 7), fin: "", colorId: COLOR_CURSO[g.curso] || COLOR_CURSO.Otro,
-          titulo: m.a.nombre + " · " + (g.nombre || g.curso) + " (cambio de día)",
+          titulo: m.a.nombre + " · " + (g.nombre || g.curso) + " (cambio de día)", avisos: avisosDe(m.a),
           descripcion: "Clase del " + de.split("-").reverse().join("/") + " pasada a este día." + (m.a.telefono ? "\nTeléfono: " + m.a.telefono : "") + "\n\nEsta clase se sincroniza con la app Alumnos y Cuotas."
         };
       });
     });
     out[k] = {
-      clave: k, d: g.d, h: g.h, hf: g.hf, f: g.f, inicio: inicio, fin: fin, colorId: COLOR_CURSO[g.curso] || COLOR_CURSO.Otro, cambios: cambios,
+      clave: k, d: g.d, h: g.h, hf: g.hf, f: g.f, inicio: inicio, fin: fin, colorId: COLOR_CURSO[g.curso] || COLOR_CURSO.Otro, cambios: cambios, avisos: unirAvisos(g.miembros.map(function (m) { return avisosDe(m.a); })),
       titulo: (g.nombre ? g.nombre + " (" + g.curso + ")" : g.curso) + " · " + g.miembros.map(function (m) { return String(m.a.nombre); }).join(", "),
       descripcion: "Integrantes:\n" + g.miembros.map(function (m) { return "• " + m.a.nombre + (m.a.telefono ? " (" + m.a.telefono + ")" : ""); }).join("\n") + "\n\nEsta clase se sincroniza con la app Alumnos y Cuotas."
     };
@@ -637,13 +645,15 @@ function eventosDeseados(st) {
     const k = ["t", f.id].join("|"), tipo = t.tipo || "Otro";
     out[k] = {
       clave: k, d: Number(fmt(fechaLocal(t.fecha + " 12:00"), "u")), h: t.h, hf: hf, f: t.fecha, inicio: t.fecha.slice(0, 7), fin: "", colorId: COLOR_TIPO[tipo] || COLOR_TIPO.Otro,
-      titulo: a.nombre + " · " + tipo,
+      titulo: a.nombre + " · " + tipo, avisos: avisosDe(a),
       descripcion: (t.detalle ? t.detalle + "\n" : "") + (t.cobro === "aparte" ? "Se cobra aparte de la cuota" : "Incluido en la cuota") + (a.telefono ? "\nTeléfono: " + a.telefono : "") + "\n\nEste turno se sincroniza con la app Alumnos y Cuotas."
     };
   });
   Object.keys(out).forEach(function (k) {
     const e = out[k];
-    e.sig = JSON.stringify([e.d, e.h, e.hf, e.titulo, e.descripcion, e.colorId, e.inicio, e.fin, e.f || ""]);
+    const sg = [e.d, e.h, e.hf, e.titulo, e.descripcion, e.colorId, e.inicio, e.fin, e.f || ""];
+    if (e.avisos && e.avisos.length) sg.push(e.avisos); // solo si hay, para no tocar los eventos de siempre
+    e.sig = JSON.stringify(sg);
   });
   return out;
 }
@@ -659,7 +669,7 @@ function cuerpoEvento(ev, desde) {
     start: { dateTime: desde + "T" + ev.h + ":00", timeZone: TZ },
     end: { dateTime: desde + "T" + ev.hf + ":00", timeZone: TZ },
     recurrence: ev.f ? [] : [rrule],
-    reminders: { useDefault: false, overrides: [] },
+    reminders: { useDefault: false, overrides: (ev.avisos || []).map(function (n) { return { method: "popup", minutes: n }; }) },
     extendedProperties: { private: { app: "fack", clave: ev.clave } }
   };
 }
