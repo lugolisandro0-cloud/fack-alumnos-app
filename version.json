@@ -1,6 +1,6 @@
 {
- "version": "1.8.0",
- "sha256": "522600a05001a41ff81c2b2cdc530b554b6612386cd9b9da8a6c6e46c00c6ac4",
- "notas": "Asistencias: nueva pestaña para marcar quién vino, quién faltó y quién avisó en cada clase",
+ "version": "1.9.0",
+ "sha256": "c7278b20fdf2ee5af6facc45cf9d95f5533f6fb26f58518fa3b80576e7bd0bd2",
+ "notas": "Cambiar de día: mover un ensamble entero, o pasar una clase a otro día solo por una semana",
  "base": "1.6.0"
 }
