@@ -413,8 +413,20 @@ function correspondeAdmin(y,m){return alumnos.filter(a=>activoEn(a,y,m)).reduce(
 /* ---------- lógica de cuotas ---------- */
 const activoEn=(a,y,m)=>{const k=mk(y,m);if(a.inicio&&a.inicio>k)return false;if(a.fin)return k<a.fin;return a.activo!==false};
 const DIAS=["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"],DIAS_L=["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"];
-const clasesDe=a=>Array.isArray(a.clases)?a.clases.filter(c=>c&&c.d>=1&&c.d<=7).map(c=>{const h=c.h||"18:00";let hf=c.hf;if(!hf){const t=(+h.split(":")[0])*60+(+h.split(":")[1]||0)+(c.dur||60);hf=String(Math.min(23*60+59,t)/60|0).padStart(2,"0")+":"+String(Math.min(23*60+59,t)%60).padStart(2,"0")}const f=/^\d{4}-\d{2}-\d{2}$/.test(String(c.f||""))?String(c.f):"";return {id:c.id||"",d:f?(parse(f).getDay()+6)%7+1:c.d,h,hf,f}}):[];
+const clasesDe=a=>Array.isArray(a.clases)?a.clases.filter(c=>c&&c.d>=1&&c.d<=7).map(c=>{const h=c.h||"18:00";let hf=c.hf;if(!hf){const t=(+h.split(":")[0])*60+(+h.split(":")[1]||0)+(c.dur||60);hf=String(Math.min(23*60+59,t)/60|0).padStart(2,"0")+":"+String(Math.min(23*60+59,t)%60).padStart(2,"0")}const f=/^\d{4}-\d{2}-\d{2}$/.test(String(c.f||""))?String(c.f):"";return {id:c.id||"",d:f?(parse(f).getDay()+6)%7+1:c.d,h,hf,f,cambios:f?{}:cambiosOk(c.cambios,c.d)}}):[];
 const enDia=(c,D,wd)=>c.f?c.f===iso(D):c.d===wd;
+const RX_F=/^\d{4}-\d{2}-\d{2}$/,RX_H=/^\d{1,2}:\d{2}$/;
+const diaSem=f=>(parse(f).getDay()+6)%7+1;
+/* Cambios de una sola semana: {"fecha original":{a:"fecha nueva",h,hf}}. Solo valen si la fecha original cae en el día de la clase. */
+function cambiosOk(cm,d){const o={};if(cm&&typeof cm==="object")for(const de in cm){const x=cm[de];if(RX_F.test(de)&&x&&RX_F.test(String(x.a||""))&&RX_H.test(String(x.h||""))&&RX_H.test(String(x.hf||""))&&diaSem(de)===+d)o[de]={a:x.a,h:x.h,hf:x.hf}}return o}
+/* Clases de un alumno que se dan en la fecha D, ya con los cambios de semana aplicados.
+   h/hf: horario de ese día; h0/hf0: horario fijo de la clase; mov: fecha original si se movió. */
+function ocurr(a,D){const f=iso(D),wd=(D.getDay()+6)%7+1,out=[];
+  for(const c of clasesDe(a)){const b={...c,h0:c.h,hf0:c.hf,mov:""};
+    if(c.f){if(c.f===f)out.push(b);continue}
+    if(c.d===wd&&!c.cambios[f])out.push(b);
+    for(const de in c.cambios){const x=c.cambios[de];if(x.a===f)out.push({...b,h:x.h,hf:x.hf,mov:de})}}
+  return out}
 const fechaCorta=f=>{const D=parse(f);return D.getDate()+"/"+(D.getMonth()+1)};
 const horarioTxt=a=>{const c=clasesDe(a).slice().sort((x,y)=>(x.f?1:0)-(y.f?1:0)||String(x.f).localeCompare(String(y.f))||x.d-y.d||String(x.h).localeCompare(String(y.h)));return c.length?c.map(x=>`${DIAS[x.d-1]}${x.f?" "+fechaCorta(x.f):""} ${x.h}–${x.hf}`.trim()).join(" · "):""};//||""}`.trim()).join(" · "):""};
 const finTxt=a=>a.fin?new Date(+a.fin.slice(0,4),+a.fin.slice(5,7)-1,1).toLocaleDateString("es-AR",{month:"long",year:"numeric"}):"";
@@ -633,13 +645,13 @@ function vCalMes(){
   const SD=selDay??(isPhone()&&isCur?t.getDate():null);
   const act=alumnos.filter(a=>activoEn(a,y,m));
   const byDay={};for(const a of act){if(!puede("verCobros")||!tieneCuota(a))continue;const d=diaVence(a,y,m);(byDay[d]=byDay[d]||[]).push(a)}
-  const clasesDia=d=>{const D0=new Date(y,m,d),wd=(D0.getDay()+6)%7+1,out=[],gr={};for(const a of act)for(const c of clasesDe(a))if(enDia(c,D0,wd)){
-      if(GRUPALES.includes(a.curso)){const g=grupoDe(a),k=`${a.curso}|${wd}|${c.h}|${c.hf}|${g}|${c.f}`;if(!gr[k]){gr[k]={curso:a.curso,wd,h:c.h,hf:c.hf,g,f:c.f,miembros:[]};out.push({grupo:gr[k],h:c.h,hf:c.hf,nombre:""})}gr[k].miembros.push(a)}
+  const clasesDia=d=>{const D0=new Date(y,m,d),wd=(D0.getDay()+6)%7+1,out=[],gr={};for(const a of act)for(const c of ocurr(a,D0)){
+      if(GRUPALES.includes(a.curso)){const g=grupoDe(a),k=`${a.curso}|${c.d}|${c.h0}|${c.hf0}|${g}|${c.f}|${c.h}|${c.hf}`;if(!gr[k]){gr[k]={curso:a.curso,wd:c.d,h:c.h0,hf:c.hf0,g,f:c.f,fe:iso(D0),miembros:[]};out.push({grupo:gr[k],h:c.h,hf:c.hf,nombre:""})}gr[k].miembros.push(a)}
       else out.push({a,h:c.h,hf:c.hf,nombre:a.nombre})}
     for(const t of turnosFecha(D0))out.push({turno:t,h:t.h,hf:hfT(t),nombre:tituloT(t)});
     for(const o of out)if(o.grupo){o.grupo.miembros.sort((p,q)=>p.nombre.localeCompare(q.nombre));o.nombre=tituloGrupo(o.grupo.curso,o.grupo.g,o.grupo.miembros.length)}
     return out.sort((p,q)=>p.h.localeCompare(q.h)||p.nombre.localeCompare(q.nombre))};
-  const grAttr=c=>`data-grupo="${esc(c.grupo.curso)}|${c.grupo.wd}|${c.grupo.h}|${c.grupo.hf}|${esc(c.grupo.g||"")}|${c.grupo.f||""}"`;
+  const grAttr=c=>`data-grupo="${esc(c.grupo.curso)}|${c.grupo.wd}|${c.grupo.h}|${c.grupo.hf}|${esc(c.grupo.g||"")}|${c.grupo.f||""}|${c.grupo.fe||""}"`;
   const verCl=calVer!=="cuotas",verCu=calVer!=="clases";
   let cells="";const total=Math.ceil((start+days)/7)*7;
   for(let i=0;i<total;i++){
@@ -661,7 +673,7 @@ function vCalMes(){
     det=`<div class="sheetbox"><div class="subh" style="color:var(--ink);font-size:15px">${fecha}</div>
       ${(esDueno()||puede("editarAlumnos"))?`<button class="btn sm" data-nuevoturno="${iso(new Date(y,m,SD))}" style="align-self:flex-start;margin:6px 10px 2px">+ Agendar turno este día</button>`:""}
       ${verCl?`<div class="subh">Clases y turnos</div><div class="tablewrap"><table class="grid" style="min-width:0"><tbody>
-      ${cl.map(c=>`<tr><td style="width:110px"><div class="txt num" style="color:var(--paid)">${esc(c.h)}–${esc(c.hf)}</div></td><td><button class="txt" ${c.grupo?grAttr(c):c.turno?`data-turno="${c.turno.id}"`:`data-edit-al="${c.a.id}"`} style="border:0;background:none;color:inherit;text-align:left;padding:0 10px;font-weight:600">${esc(c.nombre)}</button></td><td>${c.turno?`<div style="display:flex;align-items:center;justify-content:flex-end">${turnoPill(c.turno)}</div>`:`<div class="txt muted">${esc(c.grupo?c.grupo.miembros.map(x=>x.nombre).join(", "):(c.a.curso||""))}</div>`}</td></tr>`).join("")||`<tr><td><div class="empty" style="padding:12px">No hay clases este día.</div></td></tr>`}
+      ${cl.map(c=>`<tr><td style="width:110px"><div class="txt num" style="color:var(--paid)">${esc(c.h)}–${esc(c.hf)}</div></td><td><button class="txt" ${c.grupo?grAttr(c):c.turno?`data-turno="${c.turno.id}"`:`data-edit-al="${c.a.id}" data-fe="${iso(new Date(y,m,SD))}"`} style="border:0;background:none;color:inherit;text-align:left;padding:0 10px;font-weight:600">${esc(c.nombre)}</button></td><td>${c.turno?`<div style="display:flex;align-items:center;justify-content:flex-end">${turnoPill(c.turno)}</div>`:`<div class="txt muted">${esc(c.grupo?c.grupo.miembros.map(x=>x.nombre).join(", "):(c.a.curso||""))}</div>`}</td></tr>`).join("")||`<tr><td><div class="empty" style="padding:12px">No hay clases este día.</div></td></tr>`}
       </tbody></table></div>`:""}
       ${verCu?`<div class="subh">Cuotas</div><div class="tablewrap"><table class="grid" style="min-width:0"><tbody>
       ${cu.map(a=>{const e=estado(a,y,m);return `<tr><td><button class="txt" data-edit-al="${a.id}" style="border:0;background:none;color:inherit;text-align:left;padding:0 10px;font-weight:600">${esc(a.nombre)}</button></td><td class="num" style="text-align:right;padding:0 10px">${fmtM(a.cuota,monDe(a))}</td><td><button class="pill ${e}" data-cuota="${a.id}" data-ym="${mk(y,m)}">${estTxt[e]}</button></td></tr>`}).join("")||`<tr><td><div class="empty" style="padding:12px">Nadie paga este día.</div></td></tr>`}
@@ -679,7 +691,7 @@ function vCalMes(){
   </div>`;
 }
 /* ---------- calendario tipo agenda (día / semana) ---------- */
-let calView=null,calAnchor=null;
+let calView=null,calAnchor=null,feCtx="";
 const COLORES={"Canto":"#D61E8D","Guitarra":"#4CA4D7","Piano":"#9B6BFF","Batería":"#F06A3C","Bajo":"#22B8A0","Producción":"#E0A030","Mezcla":"#5FC46E","Ensambles":"#4F7BFF","Mentoría":"#F27EB4","Otro":"#8E8EA0"};
 const colorCurso=c=>COLORES[c]||COLORES.Otro;
 const aMin=h=>{const [a,b]=String(h||"0:0").split(":").map(Number);return (a||0)*60+(b||0)};
@@ -694,11 +706,11 @@ function anclaCal(){
 }
 function clasesFecha(D){
   const y=D.getFullYear(),m=D.getMonth(),wd=(D.getDay()+6)%7+1,out=[],grupos={};
-  for(const a of alumnos){if(!activoEn(a,y,m))continue;for(const c of clasesDe(a))if(enDia(c,D,wd)){
-    if(GRUPALES.includes(a.curso)){const g=grupoDe(a),k=`${a.curso}|${wd}|${c.h}|${c.hf}|${g}|${c.f}`;(grupos[k]=grupos[k]||{curso:a.curso,wd,h:c.h,hf:c.hf,g,f:c.f,miembros:[]}).miembros.push(a)}
-    else out.push({a,s:aMin(c.h),e:aMin(c.hf),t:a.nombre,sub:a.curso||"",color:colorCurso(a.curso),clave:["a",a.id,c.id].join("|")})}}
+  for(const a of alumnos){if(!activoEn(a,y,m))continue;for(const c of ocurr(a,D)){
+    if(GRUPALES.includes(a.curso)){const g=grupoDe(a),k=`${a.curso}|${c.d}|${c.h0}|${c.hf0}|${g}|${c.f}|${c.h}|${c.hf}`;(grupos[k]=grupos[k]||{curso:a.curso,wd:c.d,h:c.h0,hf:c.hf0,hv:c.h,hfv:c.hf,mov:c.mov,g,f:c.f,fe:iso(D),miembros:[]}).miembros.push(a)}
+    else out.push({a,s:aMin(c.h),e:aMin(c.hf),t:a.nombre,sub:(c.mov?"Cambio de día · ":"")+(a.curso||""),color:colorCurso(a.curso),clave:["a",a.id,c.id].join("|"),mov:c.mov})}}
   for(const t of turnosFecha(D))out.push({turno:t,s:aMin(t.h),e:Math.max(aMin(hfT(t)),aMin(t.h)+15),t:tituloT(t),sub:t.detalle||precioTxt(t),color:COLOR_TIPO[tipoT(t)]||COLOR_TIPO.Otro,clave:"t|"+t.id});
-  for(const g of Object.values(grupos)){g.miembros.sort((p,q)=>p.nombre.localeCompare(q.nombre));out.push({grupo:g,clave:["g",g.curso,g.wd,g.h,g.hf].concat(g.g||g.f?[g.g]:[]).concat(g.f?[g.f]:[]).join("|"),s:aMin(g.h),e:aMin(g.hf),t:tituloGrupo(g.curso,g.g,g.miembros.length),sub:g.miembros.map(x=>x.nombre).join(", "),color:colorCurso(g.curso)})}
+  for(const g of Object.values(grupos)){g.miembros.sort((p,q)=>p.nombre.localeCompare(q.nombre));out.push({grupo:g,clave:["g",g.curso,g.wd,g.h,g.hf].concat(g.g||g.f?[g.g]:[]).concat(g.f?[g.f]:[]).join("|"),s:aMin(g.hv),e:aMin(g.hfv),t:tituloGrupo(g.curso,g.g,g.miembros.length),sub:(g.mov?"Cambio de día · ":"")+g.miembros.map(x=>x.nombre).join(", "),color:colorCurso(g.curso),mov:g.mov})}
   return out;
 }
 /* Eventos reales de Google Calendar para la agenda. La versión instalada la reemplaza. */
@@ -706,8 +718,12 @@ function eventosAgenda(desde,hasta){return null}
 function verEventoExterno(id){}
 function eventosDesdeGoogle(lista,D){
   const f=iso(D),out=[],vistos=new Set(lista.map(ev=>ev.clave).filter(Boolean));
+  // Clases con cambio de semana que tocan este día (se va o llega): esas las muestra la app, no Google.
+  const deApp=clasesFecha(D),conCambio=new Set();
+  for(const a of alumnos)for(const c of clasesDe(a))for(const de in c.cambios)if(de===f||c.cambios[de].a===f)conCambio.add(GRUPALES.includes(a.curso)?["g",a.curso,c.d,c.h,c.hf].concat(grupoDe(a)?[grupoDe(a)]:[]).join("|"):["a",a.id,c.id].join("|"));
   for(const ev of lista){
     if(ev.todoDia||!ev.s||ev.s.slice(0,10)!==f)continue;
+    if(ev.clave&&(conCambio.has(ev.clave)||ev.clave.startsWith("x|")))continue;
     const s=aMin(ev.s.slice(11,16)),e=ev.e&&ev.e.slice(0,10)===f?aMin(ev.e.slice(11,16)):24*60;
     const partes=String(ev.clave||"").split("|");let o={s,e:Math.max(e,s+15),t:ev.t||"(sin título)",sub:"",color:"#8E8EA0",gev:ev.id};
     if(partes[0]==="a"){const a=alumnos.find(x=>x.id===partes[1]);if(a)o={...o,a,t:a.nombre,sub:a.curso||"",color:colorCurso(a.curso)}}
@@ -716,14 +732,14 @@ function eventosDesdeGoogle(lista,D){
       const miembros=alumnos.filter(a=>a.curso===curso&&grupoDe(a)===g&&activoEn(a,y,m)&&clasesDe(a).some(c=>String(c.d)===wd&&c.h===h&&c.hf===hf&&c.f===f)).sort((p,q)=>p.nombre.localeCompare(q.nombre));
       // Un ensamble de Google sin integrantes en la app es una serie vieja (por ejemplo, pasó a ser de una sola fecha): no se muestra.
       if(!miembros.length)continue;
-      o={...o,grupo:{curso,wd:+wd,h,hf,g,f,miembros},t:tituloGrupo(curso,g,miembros.length),sub:miembros.map(x=>x.nombre).join(", "),color:colorCurso(curso)}}
+      o={...o,grupo:{curso,wd:+wd,h,hf,g,f,fe:iso(D),miembros},t:tituloGrupo(curso,g,miembros.length),sub:miembros.map(x=>x.nombre).join(", "),color:colorCurso(curso)}}
     out.push(o);
   }
   // Clases de la app que Google todavía no tiene (recién cargadas o de una sola fecha): se muestran igual.
-  for(const c of clasesFecha(D))if(c.clave&&!vistos.has(c.clave))out.push(c);
+  for(const c of deApp)if(c.clave&&(!vistos.has(c.clave)||conCambio.has(c.clave)))out.push(c);
   return out;
 }
-function verGrupo(curso,wd,h,hf,g="",f=""){
+function verGrupo(curso,wd,h,hf,g="",f="",fe=""){
   const t=today(),mismo=c=>c.d===wd&&c.h===h&&c.hf===hf&&c.f===f,enSlot=a=>a.curso===curso&&grupoDe(a)===g&&clasesDe(a).some(mismo);
   const miembros=alumnos.filter(a=>a.activo!==false&&enSlot(a)).sort((p,q)=>p.nombre.localeCompare(q.nombre));
   const edita=esDueno()||puede("editarAlumnos");
@@ -731,10 +747,15 @@ function verGrupo(curso,wd,h,hf,g="",f=""){
     ${edita?`<div class="two"><div class="field"><label for="gN">Nombre del ensamble</label><input id="gN" placeholder="Ej.: Ensamble 1" value="${esc(g)}"></div><div class="field" style="justify-content:flex-end"><button class="btn sm ghost" id="gNok" style="align-self:flex-start;margin-top:auto">Cambiar nombre</button></div></div>`:""}
     <div class="mlist">${miembros.map(a=>{const e=puede("verCobros")?estado(a,t.getFullYear(),t.getMonth()):"na";return `<div class="mrow"><button class="av" data-edit-al="${a.id}" aria-label="Ficha de ${esc(a.nombre)}">${esc(inicial(a.nombre))}</button><button data-edit-al="${a.id}" style="border:0;background:none;text-align:left;padding:0;min-width:0;color:inherit"><div class="t">${esc(a.nombre)}</div><div class="s">${a.telefono?esc(a.telefono):"Sin teléfono"}</div></button><div class="r">${e==="na"?"":`<button class="pill ${e}" data-cuota="${a.id}" data-ym="${mk(t.getFullYear(),t.getMonth())}">${estTxt[e]}</button>`}${edita?`<button class="btn sm ghost" data-gquitar="${a.id}" title="Sacar del ensamble" style="margin-left:6px">Sacar</button>`:""}</div></div>`}).join("")||`<div class="empty">No quedan integrantes en este horario.</div>`}</div>
     ${edita?`<div class="field"><label for="gSel">Agregar un alumno que ya está cargado</label><div style="display:flex;gap:8px"><select id="gSel" style="flex:1"><option value="">Elegí un alumno…</option>${alumnos.filter(a=>a.activo!==false&&!enSlot(a)).sort((p,q)=>p.nombre.localeCompare(q.nombre)).map(a=>`<option value="${a.id}">${esc(a.nombre)}${a.curso?" · "+esc(a.curso):""}</option>`).join("")}</select><button class="btn sm" id="gSelOk">Agregar</button></div></div>`:""}
+    ${edita&&miembros.length?`<div class="lbl" style="margin-top:4px">Cambiar de día</div>
+    ${!f?`${cambiosTxt(miembros,mismo)}<button class="btn sm ghost" id="gSem" style="align-self:flex-start">Solo una semana</button>`:""}
+    <button class="btn sm ghost" id="gFijo" style="align-self:flex-start">${f?"Cambiar la fecha o el horario":"Para siempre"}</button>`:""}
     <div class="actions"><button class="btn ghost" id="gX">Cerrar</button>${edita?`<button class="btn" id="gAdd">+ Alumno nuevo</button>`:""}</div>`);
   $("#gX").onclick=closePanel;
   if(!edita)return;
-  const reabrir=ng=>setTimeout(()=>verGrupo(curso,wd,h,hf,ng,f),60);
+  const reabrir=ng=>setTimeout(()=>verGrupo(curso,wd,h,hf,ng,f,fe),60);
+  if($("#gSem"))$("#gSem").onclick=()=>cambioSemanaPanel({titulo:g||curso,fe,opciones:[{d:wd,h,hf,miembros:miembros.map(a=>({a,es:mismo}))}],volver:()=>verGrupo(curso,wd,h,hf,g,f,fe)});
+  if($("#gFijo"))$("#gFijo").onclick=()=>moverGrupoPanel({curso,wd,h,hf,g,f,fe,miembros,mismo});
   $("#gAdd").onclick=()=>alumnoPanel(null,{curso,grupo:g,clases:[{d:wd,h,hf,f}]});
   $("#gSelOk").onclick=()=>{const a=alumnos.find(x=>x.id===$("#gSel").value);if(!a){toast("Elegí un alumno de la lista.");return}
     const nuevaClase={id:uid(),d:wd,h,hf,...(f?{f}:{})};
@@ -746,6 +767,73 @@ function verGrupo(curso,wd,h,hf,g="",f=""){
   $("#gNok").onclick=()=>{const ng=$("#gN").value.replace(/\|/g,"/").trim();if(ng===g)return;
     if(ng&&alumnos.some(a=>a.curso===curso&&grupoDe(a)===ng&&!enSlot(a)&&clasesDe(a).some(mismo))){toast("Ya hay un ensamble con ese nombre en este horario.");return}
     for(const a of miembros)put("alumnos",a.id,{...strip(a),grupo:ng});toast("Nombre guardado");reabrir(ng)};
+}
+/* ---------- cambios de día ---------- */
+const fechaLarga=f=>DIAS_L[diaSem(f)-1].toLowerCase()+" "+fechaCorta(f);
+// Lista corta de los cambios de semana que vienen (o recientes) de una clase.
+function cambiosTxt(miembros,es){
+  const desde=iso(addD(today(),-7)),vistos={};
+  for(const a of miembros)for(const c of clasesDe(a))if(es(c))for(const de in c.cambios)if(de>=desde||c.cambios[de].a>=desde){const x=c.cambios[de];vistos[de]=vistos[de]||`${fechaLarga(de)} → <b>${esc(fechaLarga(x.a))}</b> ${esc(x.h)}–${esc(x.hf)}`}
+  const k=Object.keys(vistos).sort();
+  return k.length?`<div class="foot" style="margin:0">Cambios: ${k.map(de=>vistos[de]).join(" · ")}</div>`:"";
+}
+// Guarda (o quita, con val=null) el cambio de una fecha en las clases indicadas.
+function guardarCambio(miembros,de,val){
+  for(const {a,es} of miembros){
+    const clases=clasesDe(a).map(c=>{if(!es(c)||c.f)return c;const cm={...c.cambios};if(val)cm[de]=val;else delete cm[de];return {...c,cambios:cm}});
+    put("alumnos",a.id,{...strip(a),clases});
+  }
+}
+/* Mover una sola clase a otro día/horario, sin tocar el horario fijo.
+   o.opciones: [{d,h,hf,etiqueta,miembros:[{a,es}]}]; o.fe: fecha tocada en el calendario (opcional). */
+function cambioSemanaPanel(o){
+  const hoy=iso(today()),lun=lunesDe(today()),ops=[];
+  o.opciones.forEach((op,i)=>{
+    const cm={};for(const {a,es} of op.miembros)for(const c of clasesDe(a))if(es(c))Object.assign(cm,c.cambios);
+    const fechas=new Set();for(let k=-1;k<=10;k++)fechas.add(iso(addD(lun,k*7+op.d-1)));
+    Object.keys(cm).forEach(de=>fechas.add(de));
+    [...fechas].sort().forEach(de=>{if(de<iso(addD(today(),-7))&&!cm[de])return;ops.push({i,de,op,x:cm[de]||null})});
+  });
+  if(!ops.length){toast("Esta clase no tiene un horario semanal.");return}
+  // Qué fecha viene elegida: la tocada en el calendario (o la original si ya estaba movida a ese día), si no la próxima.
+  let sel=ops.find(x=>x.de===o.fe&&o.opciones.length===1)||ops.find(x=>x.x&&x.x.a===o.fe)||ops.find(x=>x.de>=hoy)||ops[0];
+  const opH=v=>HORAS.concat(HORAS.includes(v)?[]:[v]).sort().map(x=>`<option ${x===v?"selected":""}>${esc(x)}</option>`).join("");
+  const etq=x=>`${fechaLarga(x.de)}${o.opciones.length>1?` · ${x.op.h}`:""}${x.x?` (ya pasa al ${fechaLarga(x.x.a)})`:""}`;
+  panel(`<div class="lbl">Cambiar de día una sola semana</div><h2 style="font-size:24px">${esc(o.titulo)}</h2>
+    <p class="foot" style="margin:0">La clase de ese día pasa a otra fecha. Las demás semanas siguen en su horario de siempre. No es una clase extra: se mueve la que ya tiene.</p>
+    <div class="field"><label for="csDe">Clase del</label><select id="csDe">${ops.map((x,k)=>`<option value="${k}" ${x===sel?"selected":""}>${esc(etq(x))}</option>`).join("")}</select></div>
+    <div class="field"><label for="csA">Pasa al</label><input id="csA" type="date"></div>
+    <div class="two"><div class="field"><label for="csH">Desde</label><select id="csH"></select></div><div class="field"><label for="csHf">Hasta</label><select id="csHf"></select></div></div>
+    <div class="actions">${o.volver?`<button class="btn ghost" id="csV">Volver</button>`:`<button class="btn ghost" id="csV">Cancelar</button>`}<button class="btn ghost" id="csQ" style="display:none">Deshacer el cambio</button><button class="btn" id="csOk">Guardar cambio</button></div>`);
+  const llenar=()=>{const x=ops[+$("#csDe").value];$("#csA").value=x.x?x.x.a:x.de;$("#csH").innerHTML=opH(x.x?x.x.h:x.op.h);$("#csHf").innerHTML=opH(x.x?x.x.hf:x.op.hf);$("#csQ").style.display=x.x?"":"none"};
+  llenar();$("#csDe").onchange=llenar;
+  const salir=()=>{if(o.volver)setTimeout(o.volver,60);else closePanel()};
+  $("#csV").onclick=()=>o.volver?o.volver():closePanel();
+  $("#csQ").onclick=()=>{const x=ops[+$("#csDe").value];guardarCambio(x.op.miembros,x.de,null);toast(`La clase del ${fechaLarga(x.de)} vuelve a su horario`);salir()};
+  $("#csOk").onclick=()=>{const x=ops[+$("#csDe").value],a=$("#csA").value,h=$("#csH").value,hf=$("#csHf").value;
+    if(!RX_F.test(a)){toast("Elegí a qué fecha pasa la clase.");return}
+    if(aMin(hf)<=aMin(h)){toast(`Tiene que terminar después de las ${h}.`);return}
+    if(a===x.de&&h===x.op.h&&hf===x.op.hf){if(x.x){guardarCambio(x.op.miembros,x.de,null);toast("Queda en su horario de siempre")}salir();return}
+    guardarCambio(x.op.miembros,x.de,{a,h,hf});
+    toast(`La clase del ${fechaLarga(x.de)} pasa al ${fechaLarga(a)}, ${h}`);salir()};
+}
+// Cambiar el horario fijo de todo un ensamble de una vez.
+function moverGrupoPanel(G){
+  const opH=v=>HORAS.concat(HORAS.includes(v)?[]:[v]).sort().map(x=>`<option ${x===v?"selected":""}>${esc(x)}</option>`).join("");
+  panel(`<div class="lbl">${G.f?"Cambiar la fecha":"Cambiar el horario fijo"}</div><h2 style="font-size:24px">${esc(G.g||G.curso)}</h2>
+    <p class="foot" style="margin:0">Se mueven juntos los ${G.miembros.length} integrantes${G.f?"":", desde esta semana en adelante. Si es por una sola semana, usá \"Solo una semana\""}.</p>
+    ${G.f?`<div class="field"><label for="mgF">Fecha</label><input id="mgF" type="date" value="${esc(G.f)}"></div>`:`<div class="field"><label for="mgD">Día</label><select id="mgD">${DIAS_L.map((n,k)=>`<option value="${k+1}" ${G.wd===k+1?"selected":""}>${n}</option>`).join("")}</select></div>`}
+    <div class="two"><div class="field"><label for="mgH">Desde</label><select id="mgH">${opH(G.h)}</select></div><div class="field"><label for="mgHf">Hasta</label><select id="mgHf">${opH(G.hf)}</select></div></div>
+    <div class="actions"><button class="btn ghost" id="mgV">Volver</button><button class="btn" id="mgOk">Mover el ensamble</button></div>`);
+  const volver=()=>verGrupo(G.curso,G.wd,G.h,G.hf,G.g,G.f,G.fe);
+  $("#mgV").onclick=volver;
+  $("#mgOk").onclick=()=>{const h=$("#mgH").value,hf=$("#mgHf").value,f=G.f?$("#mgF").value:"",d=G.f?(RX_F.test(f)?diaSem(f):0):+$("#mgD").value;
+    if(G.f&&!RX_F.test(f)){toast("Elegí la fecha.");return}
+    if(aMin(hf)<=aMin(h)){toast(`Tiene que terminar después de las ${h}.`);return}
+    if(d===G.wd&&h===G.h&&hf===G.hf&&f===G.f){volver();return}
+    for(const a of G.miembros){const clases=clasesDe(a).map(c=>G.mismo(c)?{id:c.id,d,h,hf,...(f?{f}:{}),cambios:{}}:c);put("alumnos",a.id,{...strip(a),clases})}
+    toast(`${G.g||G.curso} pasa a ${f?fechaLarga(f):DIAS_L[d-1].toLowerCase()} ${h}–${hf}`);
+    setTimeout(()=>verGrupo(G.curso,d,h,hf,G.g,f,f||""),60)};
 }
 function cuotasFecha(D){const y=D.getFullYear(),m=D.getMonth();return puede("verCobros")?alumnos.filter(a=>activoEn(a,y,m)&&tieneCuota(a)&&diaVence(a,y,m)===D.getDate()):[]}
 function carriles(evs){
@@ -795,7 +883,7 @@ function vCalAgenda(){
   const columnas=datos.map(x=>{
     let slots="";for(let m=h0;m<h1;m+=60)slots+=`<button class="slot" style="top:${(m-h0)/60*PX}px;height:${PX}px" data-slot="${iso(x.D)}|${deMin(m)}" aria-label="Agendar ${DIAS[(x.D.getDay()+6)%7]} ${deMin(m)}"></button>`;
     const evs=x.cl.map(e=>{const top=(e.s-h0)/60*PX,h=Math.max(20,(e.e-e.s)/60*PX-2),w=100/e.n,corto=h<40;
-      const dest=e.turno?`data-turno="${e.turno.id}"`:e.a?`data-edit-al="${e.a.id}"`:e.grupo?`data-grupo="${esc(e.grupo.curso)}|${e.grupo.wd}|${e.grupo.h}|${e.grupo.hf}|${esc(e.grupo.g||"")}|${e.grupo.f||""}"`:`data-gev="${esc(e.gev||"")}"`;
+      const dest=e.turno?`data-turno="${e.turno.id}"`:e.a?`data-edit-al="${e.a.id}" data-fe="${iso(x.D)}"`:e.grupo?`data-grupo="${esc(e.grupo.curso)}|${e.grupo.wd}|${e.grupo.h}|${e.grupo.hf}|${esc(e.grupo.g||"")}|${e.grupo.f||""}|${e.grupo.fe||""}"`:`data-gev="${esc(e.gev||"")}"`;
       return `<button class="wk-ev ${corto?"corto":""} ${e.grupo?"grp":""} ${e.turno?"tu":""}" ${dest} style="top:${top}px;height:${h}px;left:calc(${e.lane*w}% + 2px);width:calc(${w}% - 4px);--c:${e.color}" title="${esc(e.t)} · ${deMin(e.s)}–${deMin(e.e)}${e.sub?" · "+esc(e.sub):""}"><span class="en">${esc(e.t)}</span><span class="et">${deMin(e.s)}–${deMin(e.e)}${!corto&&e.sub?" · "+esc(e.sub):""}</span></button>`}).join("");
     let linea="";if(esHoy(x.D)){const nm=ahora.getHours()*60+ahora.getMinutes();if(nm>=h0&&nm<=h1)linea=`<div class="ahora" style="top:${(nm-h0)/60*PX}px"></div>`}
     return `<div class="wk-col ${esHoy(x.D)?"hoy":""}" style="height:${alto}px;background-size:100% ${PX}px">${slots}${evs}${linea}</div>`}).join("");
@@ -1055,7 +1143,7 @@ const fechaAs=f=>{const D=parse(f);return DIAS[(D.getDay()+6)%7]+" "+D.getDate()
 // Clases de un día: individuales, ensambles (una marca por integrante) y turnos sueltos.
 function itemsAsist(D){
   const y=D.getFullYear(),m=D.getMonth(),wd=(D.getDay()+6)%7+1,f=iso(D),out=[],grupos={};
-  for(const a of alumnos){if(!activoEn(a,y,m))continue;for(const c of clasesDe(a))if(enDia(c,D,wd)){
+  for(const a of alumnos){if(!activoEn(a,y,m))continue;for(const c of ocurr(a,D)){
     const it={k:kAs(a.id,f,c),a,f,h:c.h,hf:c.hf,clase:c.id||"",sub:a.curso||""};
     if(GRUPALES.includes(a.curso)){const g=grupoDe(a),gk=[a.curso,c.h,c.hf,g].join("|");(grupos[gk]=grupos[gk]||{grupo:true,curso:a.curso,g,h:c.h,hf:c.hf,miembros:[]}).miembros.push(it)}
     else out.push(it)}}
@@ -1069,7 +1157,7 @@ const planoAs=items=>items.flatMap(x=>x.grupo?x.miembros:[x]);
 function ocurrAlumno(a,y,m){
   const out=[],k=mk(y,m),vistos=new Set();
   if(activoEn(a,y,m))for(let d=1;d<=lastDay(y,m);d++){const D=new Date(y,m,d),wd=(D.getDay()+6)%7+1,f=iso(D);
-    for(const c of clasesDe(a))if(enDia(c,D,wd))out.push({k:kAs(a.id,f,c),a,f,h:c.h,hf:c.hf,clase:c.id||"",sub:(a.curso||"")+(GRUPALES.includes(a.curso)&&grupoDe(a)?" · "+grupoDe(a):"")})}
+    for(const c of ocurr(a,D))out.push({k:kAs(a.id,f,c),a,f,h:c.h,hf:c.hf,clase:c.id||"",sub:(c.mov?"Cambio de día · ":"")+(a.curso||"")+(GRUPALES.includes(a.curso)&&grupoDe(a)?" · "+grupoDe(a):"")})}
   for(const t of turnos)if(t.alumnoId===a.id&&String(t.fecha||"").startsWith(k))out.push({k:kAsT(t),a,f:t.fecha,h:t.h||"",hf:hfT(t),turno:t,sub:tipoT(t)});
   out.forEach(x=>vistos.add(x.k));
   for(const r of Object.values(asistencias))if(r.alumnoId===a.id&&String(r.fecha||"").startsWith(k)&&!vistos.has(r.id))out.push({k:r.id,a,f:r.fecha,h:r.h||"",hf:r.hf||"",clase:r.clase||"",turno:r.turnoId?{id:r.turnoId}:null,sub:"Ya no está en el horario"});
@@ -1283,6 +1371,7 @@ function alumnoPanel(a,pre,vista){
     <div class="lbl" style="margin-top:4px">¿Cuándo tiene clase?</div>
     <div id="clList" style="display:flex;flex-direction:column;gap:8px">${cls.map(claseRowHTML).join("")}</div>
     <button type="button" class="btn sm ghost" id="clAdd" style="align-self:flex-start">+ Otro día de clase</button>
+    ${!nuevo&&(esDueno()||puede("editarAlumnos"))&&clasesDe(a).some(c=>!c.f)?`${cambiosTxt([a],c=>!c.f)}<button type="button" class="btn sm ghost" id="clSem" style="align-self:flex-start">Cambiar de día una sola semana</button>`:""}
     ${seccionCuota}
     <div class="actions"><button class="btn ghost" id="aX">${edita?"Cancelar":"Cerrar"}</button>${edita?`<button class="btn" id="aOk">${nuevo?"Agregar alumno":"Guardar cambios"}</button>`:""}</div>
     ${nuevo?"":`<div class="actions">${dueno||puede("bajasAlumnos")?`<button class="btn ghost" id="aBaja" style="${baja?"":"color:var(--late);border-color:var(--late)"}">${baja?"Reactivar alumno":"Dar de baja"}</button>`:""}${dueno?`<button class="btn ghost" id="aDel">Eliminar</button>`:""}</div>`}
@@ -1315,7 +1404,10 @@ function alumnoPanel(a,pre,vista){
     const extra={...extra0,grupo};
     if(nuevo){if(crearAlumno($("#aN").value,$("#aC").value,extra,null,$("#aT").value,clases))closePanel();return}
     const nm=$("#aN").value.trim();if(!nm){toast("Escribí el nombre del alumno.");return}
-    put("alumnos",a.id,{...strip(a),nombre:nm,curso:$("#aC").value,telefono:$("#aT").value.trim(),clases,...extra});closePanel();toast("Cambios guardados")};
+    // Los cambios de una sola semana se conservan si la clase sigue en el mismo día.
+    const prev=clasesDe(a),clases2=clases.map(c=>{const o=prev.find(x=>x.id&&x.id===c.id);return o&&!c.f&&o.d===c.d&&Object.keys(o.cambios).length?{...c,cambios:o.cambios}:c});
+    put("alumnos",a.id,{...strip(a),nombre:nm,curso:$("#aC").value,telefono:$("#aT").value.trim(),clases:clases2,...extra});closePanel();toast("Cambios guardados")};
+  if($("#clSem"))$("#clSem").onclick=()=>{const fe=feCtx;cambioSemanaPanel({titulo:a.nombre,fe,opciones:clasesDe(a).filter(c=>!c.f).map(c=>({d:c.d,h:c.h,hf:c.hf,miembros:[{a,es:x=>x.id?x.id===c.id:x.d===c.d&&x.h===c.h}]})),volver:()=>alumnoPanel(alumnos.find(x=>x.id===a.id)||a)})};
   if(!nuevo){
     if($("#aBaja"))$("#aBaja").onclick=()=>baja?reactivar(a):bajaPanel(a);
     if($("#aDel"))$("#aDel").onclick=()=>eliminarPanel(a);
@@ -1451,7 +1543,7 @@ document.addEventListener("click",ev=>{
   if(T.id==="asTodos"){marcarVinieron(planoAs(itemsAsist(diaAs())));return}
   if(T.id==="asTodosAl"){const a=alumnos.find(x=>x.id===asAlumno);if(a)marcarVinieron(ocurrAlumno(a,cur.y,cur.m).filter(it=>it.f<=iso(today())));return}
   const cu=T.closest("[data-cuota]");if(cu){ev.stopPropagation();abrirCuota(cu.dataset.cuota,cu.dataset.ym);return}
-  const gr=T.closest("[data-grupo]");if(gr){const [c,wd,h,hf,g,f]=gr.dataset.grupo.split("|");verGrupo(c,+wd,h,hf,g||"",f||"");return}
+  const gr=T.closest("[data-grupo]");if(gr){const [c,wd,h,hf,g,f,fe]=gr.dataset.grupo.split("|");verGrupo(c,+wd,h,hf,g||"",f||"",fe||"");return}
   const ge=T.closest("[data-gev]");if(ge){verEventoExterno(ge.dataset.gev);return}
   const lq=T.closest("[data-liq]");if(lq){const l=liquidaciones.find(x=>x.id===lq.dataset.liq);if(l&&esDueno())liquidacionPanel(l);return}
   if(T.id==="admPagar"){liquidacionPanel(null);return}
@@ -1464,7 +1556,7 @@ document.addEventListener("click",ev=>{
   const cvw=T.closest("[data-calview]");if(cvw){calView=cvw.dataset.calview;if(calView!=="mes"&&!calAnchor){const t=today();calAnchor=(t.getFullYear()===cur.y&&t.getMonth()===cur.m)?t:new Date(cur.y,cur.m,1)}render();return}
   const cn=T.closest("[data-calnav]");if(cn){moverCal(cn.dataset.calnav);return}
   const gd=T.closest("[data-goday]");if(gd){const D=parse(gd.dataset.goday);calAnchor=D;cur={y:D.getFullYear(),m:D.getMonth()};calView="dia";render();return}
-  const eal=T.closest("[data-edit-al]");if(eal){ev.stopPropagation();const a=alumnos.find(x=>x.id===eal.dataset.editAl);if(a)alumnoPanel(a);return}
+  const eal=T.closest("[data-edit-al]");if(eal){ev.stopPropagation();feCtx=eal.dataset.fe||"";const a=alumnos.find(x=>x.id===eal.dataset.editAl);if(a)alumnoPanel(a);return}
   const bj=T.closest("[data-baja]");if(bj){const a=alumnos.find(x=>x.id===bj.dataset.baja);if(a){a.activo===false?reactivar(a):bajaPanel(a)}return}
   const da=T.closest("[data-del-al]");if(da){const a=alumnos.find(x=>x.id===da.dataset.delAl);if(a)eliminarPanel(a);return}
   const dg=T.closest("[data-del-g]");if(dg){del("gastos",dg.dataset.delG);toast("Gasto borrado");return}

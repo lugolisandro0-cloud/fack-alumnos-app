@@ -45,7 +45,7 @@ function crearEntorno(opts = {}) {
   const ss = { getName: () => "Planilla", getSheetByName: n => sheets[n] || null, insertSheet: n => (sheets[n] = mkSheet(n)) };
   // ---- Calendar
   let seq = 1, nid = 1;
-  const cals = {}, events = {};
+  const cals = {}, events = {}, instCambios = [];
   const tocar = ev => { ev._seq = ++seq; };
   const merge = (a, b) => { for (const k in b) { if (b[k] && typeof b[k] === "object" && !Array.isArray(b[k]) && a[k] && typeof a[k] === "object") merge(a[k], b[k]); else a[k] = JSON.parse(JSON.stringify(b[k])); } return a; };
   const Calendar = {
@@ -56,7 +56,13 @@ function crearEntorno(opts = {}) {
     Acl: { insert: () => ({}) },
     Events: {
       insert: (body, calId) => { const id = "ev" + (nid++); const ev = JSON.parse(JSON.stringify({ ...body, id, calId, status: "confirmed" })); events[id] = ev; tocar(ev); return ev; },
-      patch: (body, calId, id) => { const ev = events[id]; if (!ev || ev.status === "cancelled") throw new Error("Not Found"); merge(ev, body); tocar(ev); return ev; },
+      // instancia de una serie (id "serie@inicioOriginal"): se guarda como excepción
+      instances: (calId, id, o) => { const ev = events[id]; if (!ev || ev.status === "cancelled") throw new Error("Not Found");
+        const t = new Date(o.originalStart), s0 = new Date(ev.start.dateTime + "-03:00"); const k = Math.round((t - s0) / (7 * 864e5));
+        if (k < 0 || s0.getTime() + k * 7 * 864e5 !== t.getTime()) return { items: [] };
+        return { items: [{ id: id + "@" + t.toISOString(), recurringEventId: id, originalStartTime: { dateTime: t.toISOString() } }] }; },
+      patch: (body, calId, id) => { if (/@/.test(id)) { const [base, k] = id.split("@"); const ev = events[base]; if (!ev) throw new Error("Not Found"); ev._ov = ev._ov || {}; ev._ov[k] = merge(ev._ov[k] || {}, body); instCambios.push(id); return ev._ov[k]; }
+        const ev = events[id]; if (!ev || ev.status === "cancelled") throw new Error("Not Found"); merge(ev, body); tocar(ev); return ev; },
       remove: (calId, id) => { const ev = events[id]; if (!ev || ev.status === "cancelled") throw new Error("Resource has been deleted"); ev.status = "cancelled"; tocar(ev); },
       list: (calId, o) => {
         let items = Object.values(events).filter(e => e.calId === calId);
@@ -78,6 +84,10 @@ function crearEntorno(opts = {}) {
       for (let k = 0; k < 600; k++) {
         const a = new Date(s.getTime() + k * 7 * 864e5), b = new Date(en.getTime() + k * 7 * 864e5);
         if (until && a > until) break; if (a >= t1) break;
+        const ov = (e._ov || {})[a.toISOString()];
+        if (ov) { if (ov.status === "cancelled") continue; const c = x => new Date(/[+-]\d\d:\d\d$|Z$/.test(x) ? x : x + "-03:00"); const a2 = c(ov.start.dateTime), b2 = c(ov.end.dateTime);
+          if (b2 > t0 && a2 < t1) out.push({ id: e.id + "_" + k, summary: e.summary, start: { dateTime: a2.toISOString() }, end: { dateTime: b2.toISOString() }, extendedProperties: e.extendedProperties, status: "confirmed", movida: true });
+          if (!/WEEKLY/.test(rr)) break; continue; }
         if (b > t0) out.push({ id: e.id + "_" + k, summary: e.summary, start: { dateTime: a.toISOString() }, end: { dateTime: b.toISOString() }, extendedProperties: e.extendedProperties, status: "confirmed" });
         if (!/WEEKLY/.test(rr)) break;
       }
@@ -106,7 +116,9 @@ function crearEntorno(opts = {}) {
   vm.runInContext(fs.readFileSync(__dirname + (opts.cargador ? "/cargador.gs" : "/Codigo.gs"), "utf8"), ctx);
   const api = {
     post: body => JSON.parse(ctx.doPost({ postData: { contents: JSON.stringify(body) } }).texto),
-    events, sheets, props, cache, ctx,
+    events, sheets, props, cache, ctx, instCambios,
+    // lo que se ve en el calendario entre dos fechas (con las semanas movidas)
+    ver: (desde, hasta) => expandir(Object.values(events).filter(e => e.status !== "cancelled"), new Date(desde + "T00:00:00-03:00"), new Date(hasta + "T00:00:00-03:00")),
     setAhora: d => { ahora = new Date(d); },
     // ediciones "a mano" en Google Calendar
     gcalMover: (id, h, hf, fecha) => { const ev = events[id]; const f = fecha || ev.start.dateTime.slice(0, 10); ev.start.dateTime = f + "T" + h + ":00"; ev.end.dateTime = f + "T" + hf + ":00"; tocar(ev); },
