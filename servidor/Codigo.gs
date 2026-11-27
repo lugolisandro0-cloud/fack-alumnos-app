@@ -9,7 +9,7 @@
  */
 
 // ===== Ajustes =====
-const VERSION_SERVIDOR = "1.8.0";
+const VERSION_SERVIDOR = "1.9.0";
 const COMPARTIR_CON = (typeof AJUSTES !== "undefined" && AJUSTES && AJUSTES.COMPARTIR_CON) || ""; // mail del administrador para compartirle el calendario (opcional)
 const NOMBRE_CALENDARIO = "FACK Music · Clases";
 const TZ = "America/Argentina/Buenos_Aires";
@@ -513,20 +513,22 @@ function untilAntesDe(fecha) {
 function leerMapa() {
   const sh = hoja("_calendario", ["clave", "eventId", "d", "h", "hf", "desde", "sig"]);
   const n = sh.getLastRow();
-  const vals = n > 1 ? sh.getRange(2, 1, n - 1, 7).getValues() : [];
+  const vals = n > 1 ? sh.getRange(2, 1, n - 1, 8).getValues() : [];
   const lista = vals.filter(function (v) { return v[0] && v[1]; }).map(function (v) {
-    return { clave: String(v[0]), eventId: String(v[1]), d: Number(v[2]), h: String(v[3]), hf: String(v[4]), desde: String(v[5] || ""), sig: String(v[6] || "") };
+    let cs = null; try { cs = v[7] ? JSON.parse(String(v[7])) : null; } catch (e) { }
+    return { clave: String(v[0]), eventId: String(v[1]), d: Number(v[2]), h: String(v[3]), hf: String(v[4]), desde: String(v[5] || ""), sig: String(v[6] || ""), cs: cs };
   });
   return { sh: sh, lista: lista };
 }
 function guardarMapa(mapa) {
   const sh = mapa.sh;
   const n = sh.getLastRow();
-  if (n > 1) sh.getRange(2, 1, n - 1, 7).clearContent();
+  if (n > 1) sh.getRange(2, 1, n - 1, 8).clearContent();
+  sh.getRange(1, 8).setValues([["cambios"]]);
   if (mapa.lista.length) {
-    const r = sh.getRange(2, 1, mapa.lista.length, 7);
+    const r = sh.getRange(2, 1, mapa.lista.length, 8);
     r.setNumberFormat("@");
-    r.setValues(mapa.lista.map(function (m) { return [m.clave, m.eventId, String(m.d), m.h, m.hf, m.desde, m.sig]; }));
+    r.setValues(mapa.lista.map(function (m) { return [m.clave, m.eventId, String(m.d), m.h, m.hf, m.desde, m.sig, m.cs ? JSON.stringify(m.cs) : ""]; }));
   }
 }
 function porClave(mapa, k) { return mapa.lista.filter(function (m) { return m.clave === k; })[0]; }
@@ -540,8 +542,20 @@ function clasesDe(a) {
     let hf = c.hf;
     if (!hf) { const t = Math.min(23 * 60 + 59, aMin(c.h) + (c.dur || 60)); hf = deMin(t); }
     const f = /^\d{4}-\d{2}-\d{2}$/.test(String(c.f || "")) ? String(c.f) : "";
-    return { id: c.id || "", d: Number(c.d), h: c.h, hf: hf, f: f };
+    return { id: c.id || "", d: Number(c.d), h: c.h, hf: hf, f: f, cambios: f ? {} : cambiosOk(c.cambios, Number(c.d)) };
   });
+}
+// Cambios de una sola semana de una clase: { "fecha original": { a: "fecha nueva", h, hf } }.
+const RX_FECHA = /^\d{4}-\d{2}-\d{2}$/, RX_HORA = /^\d{1,2}:\d{2}$/;
+function diaSemana(f) { return Number(fmt(fechaLocal(f + " 12:00"), "u")); }
+function cambiosOk(cm, d) {
+  const o = {};
+  if (!cm || typeof cm !== "object") return o;
+  Object.keys(cm).forEach(function (de) {
+    const x = cm[de];
+    if (RX_FECHA.test(de) && x && RX_FECHA.test(String(x.a || "")) && RX_HORA.test(String(x.h || "")) && RX_HORA.test(String(x.hf || "")) && aMin(x.hf) > aMin(x.h) && diaSemana(de) === d) o[de] = { a: x.a, h: x.h, hf: x.hf };
+  });
+  return o;
 }
 function aMin(h) { const p = String(h).split(":"); return Number(p[0]) * 60 + Number(p[1] || 0); }
 function deMin(m) { return ("0" + Math.floor(m / 60)).slice(-2) + ":" + ("0" + (m % 60)).slice(-2); }
@@ -571,11 +585,11 @@ function eventosDeseados(st) {
       if (CURSOS_GRUPALES.indexOf(a.curso) >= 0) {
         const k = claveGrupo(a, c);
         const g = grupos[k] || (grupos[k] = { clave: k, curso: a.curso, nombre: grupoDe(a), d: c.d, h: c.h, hf: c.hf, f: c.f, miembros: [] });
-        g.miembros.push({ a: a, id: f.id, inicio: inicio, fin: fin });
+        g.miembros.push({ a: a, id: f.id, c: c, inicio: inicio, fin: fin });
       } else {
         const k = ["a", f.id, c.id].join("|");
         out[k] = {
-          clave: k, d: c.d, h: c.h, hf: c.hf, f: c.f, inicio: inicio, fin: fin, colorId: COLOR_CURSO[a.curso] || COLOR_CURSO.Otro,
+          clave: k, d: c.d, h: c.h, hf: c.hf, f: c.f, inicio: inicio, fin: fin, colorId: COLOR_CURSO[a.curso] || COLOR_CURSO.Otro, cambios: c.cambios,
           titulo: a.nombre + (a.curso ? " · " + a.curso : ""),
           descripcion: "Alumno de FACK Music" + (a.telefono ? "\nTeléfono: " + a.telefono : "") + "\n\nEsta clase se sincroniza con la app Alumnos y Cuotas."
         };
@@ -588,8 +602,26 @@ function eventosDeseados(st) {
     const inicio = g.miembros.map(function (m) { return m.inicio; }).sort()[0];
     const todosConFin = g.miembros.every(function (m) { return m.fin; });
     const fin = todosConFin ? g.miembros.map(function (m) { return m.fin; }).sort().slice(-1)[0] : "";
+    // Cambios de semana: si los tienen todos los integrantes igual, se mueve la clase del ensamble;
+    // si no, a cada uno que cambió se le arma un evento suelto ese día.
+    const cambios = {}, fechas = {};
+    g.miembros.forEach(function (m) { Object.keys(m.c.cambios).forEach(function (de) { fechas[de] = true; }); });
+    Object.keys(fechas).forEach(function (de) {
+      const v = JSON.stringify(g.miembros[0].c.cambios[de] || null);
+      if (v !== "null" && g.miembros.every(function (m) { return JSON.stringify(m.c.cambios[de] || null) === v; })) { cambios[de] = g.miembros[0].c.cambios[de]; return; }
+      g.miembros.forEach(function (m) {
+        const x = m.c.cambios[de];
+        if (!x) return;
+        const kx = ["x", m.id, m.c.id, de].join("|");
+        out[kx] = {
+          clave: kx, d: diaSemana(x.a), h: x.h, hf: x.hf, f: x.a, inicio: x.a.slice(0, 7), fin: "", colorId: COLOR_CURSO[g.curso] || COLOR_CURSO.Otro,
+          titulo: m.a.nombre + " · " + (g.nombre || g.curso) + " (cambio de día)",
+          descripcion: "Clase del " + de.split("-").reverse().join("/") + " pasada a este día." + (m.a.telefono ? "\nTeléfono: " + m.a.telefono : "") + "\n\nEsta clase se sincroniza con la app Alumnos y Cuotas."
+        };
+      });
+    });
     out[k] = {
-      clave: k, d: g.d, h: g.h, hf: g.hf, f: g.f, inicio: inicio, fin: fin, colorId: COLOR_CURSO[g.curso] || COLOR_CURSO.Otro,
+      clave: k, d: g.d, h: g.h, hf: g.hf, f: g.f, inicio: inicio, fin: fin, colorId: COLOR_CURSO[g.curso] || COLOR_CURSO.Otro, cambios: cambios,
       titulo: (g.nombre ? g.nombre + " (" + g.curso + ")" : g.curso) + " · " + g.miembros.map(function (m) { return String(m.a.nombre); }).join(", "),
       descripcion: "Integrantes:\n" + g.miembros.map(function (m) { return "• " + m.a.nombre + (m.a.telefono ? " (" + m.a.telefono + ")" : ""); }).join("\n") + "\n\nEsta clase se sincroniza con la app Alumnos y Cuotas."
     };
@@ -656,6 +688,7 @@ function horarioDe(it) {
 // Aplica en la planilla un cambio de horario hecho en Google Calendar.
 function moverClases(st, m, t) {
   const p = m.clave.split("|");
+  if (p[0] === "x") return;
   if (p[0] === "t") {
     const f = st.idx["turnos|" + p[1]];
     if (!f || f.deleted) return;
@@ -685,6 +718,7 @@ function moverClases(st, m, t) {
 // Quita de la planilla las clases de un evento borrado en Google Calendar.
 function quitarClases(st, m) {
   const p = m.clave.split("|");
+  if (p[0] === "x") return;
   if (p[0] === "t") {
     // Turno borrado en Google Calendar: se borra en la app, salvo que ya tenga un pago registrado (se vuelve a crear el evento).
     const f = st.idx["turnos|" + p[1]];
@@ -822,8 +856,15 @@ function sincronizarCalendario(st) {
       m.desde = desde;
     }
     m.d = ev.d; m.h = ev.h; m.hf = ev.hf; m.sig = ev.sig;
+    if (m.cs) m.cs.forzar = true; // se tocó la serie: los cambios de semana se vuelven a aplicar
     r.actualizados++;
   }
+  // 3) Cambios de una sola semana: se mueve esa fecha de la serie en Google Calendar.
+  Object.keys(deseados).forEach(function (k) {
+    const ev = deseados[k], m = porClave(mapa, k);
+    if (!m || ev.f || !ev.cambios) return;
+    try { aplicarCambios(calId, ev, m); } catch (err) { r.errores++; r.ultimoError = String((err && err.message) || err); }
+  });
   mapa.lista.slice().forEach(function (m) {
     if (deseados[m.clave]) return;
     const p = m.clave.split("|");
@@ -838,6 +879,26 @@ function sincronizarCalendario(st) {
     guardarMapa(mapa);
   }
   return r;
+}
+
+function aplicarCambios(calId, ev, m) {
+  const antes = m.cs && m.cs.ev === m.eventId ? (m.cs.c || {}) : {};
+  const ahora = ev.cambios || {}, hecho = {};
+  const todas = {};
+  Object.keys(antes).concat(Object.keys(ahora)).forEach(function (de) { todas[de] = true; });
+  if (!Object.keys(todas).length && !m.cs) return;
+  Object.keys(todas).forEach(function (de) {
+    const x = ahora[de] || null, v = JSON.stringify(x);
+    if (!(m.cs && m.cs.forzar) && v === JSON.stringify(antes[de] || null)) { if (x) hecho[de] = x; return; }
+    if (m.desde && de < m.desde) return; // esa fecha no es parte de esta serie
+    const r = Calendar.Events.instances(calId, m.eventId, { originalStart: de + "T" + ev.h + ":00-03:00", showDeleted: true });
+    const it = (r.items || [])[0];
+    if (!it) { if (x) hecho[de] = x; return; }
+    const destino = x || { a: de, h: ev.h, hf: ev.hf }; // sin cambio: vuelve a su horario
+    Calendar.Events.patch({ status: "confirmed", start: { dateTime: destino.a + "T" + destino.h + ":00", timeZone: TZ }, end: { dateTime: destino.a + "T" + destino.hf + ":00", timeZone: TZ } }, calId, it.id);
+    if (x) hecho[de] = x;
+  });
+  m.cs = { ev: m.eventId, c: hecho };
 }
 
 // Eventos reales del calendario (con cambios de una sola fecha) para mostrar en la agenda.
